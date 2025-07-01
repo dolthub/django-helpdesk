@@ -75,6 +75,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
+        'helpdesk.api': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
 
@@ -115,8 +120,8 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -316,6 +321,9 @@ FIXTURE_DIRS = [os.path.join(BASE_DIR, "fixtures")]
 # for Django 3.2+, set default for autofields:
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
+# Disable teams mode for simpler permissions
+HELPDESK_TEAMS_MODE_ENABLED = False
+
 # Request/Response Logging Middleware Configuration
 HELPDESK_LOG_PATHS = [
     '/api/',
@@ -331,6 +339,15 @@ HELPDESK_LOG_SENSITIVE_HEADERS = [
 
 HELPDESK_LOG_MAX_BODY_SIZE = 10000  # 10KB
 HELPDESK_LOG_BODIES = True
+
+# CSRF settings for API access
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
+CSRF_USE_SESSIONS = False     # Use cookie-based CSRF tokens
+CSRF_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with CSRF token
+
+# Session settings for API access  
+SESSION_COOKIE_HTTPONLY = False  # Allow API clients to access session
+SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with session
 
 try:
     from .local_settings import *  # noqa

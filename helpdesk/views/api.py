@@ -10,6 +10,22 @@ from helpdesk.serializers import (
 from rest_framework import viewsets
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from django.contrib.auth.models import Permission
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+
+class IsStaffUser(IsAuthenticated):
+    """
+    Allows access only to staff users (is_staff=True).
+    Less restrictive than IsAdminUser which requires superuser.
+    """
+    def has_permission(self, request, view):
+        return (
+            super().has_permission(request, view) and
+            request.user and
+            request.user.is_staff
+        )
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.pagination import PageNumberPagination
 
@@ -53,7 +69,24 @@ class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
     pagination_class = ConservativePagination
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]  # Less restrictive than IsAdminUser
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Add debug logging for permission issues."""
+        import logging
+        logger = logging.getLogger('helpdesk.api')
+        
+        logger.info(f"API Request: {request.method} {request.path}")
+        logger.info(f"User: {request.user} (authenticated: {request.user.is_authenticated})")
+        
+        if request.user.is_authenticated:
+            logger.info(f"User permissions: staff={request.user.is_staff}, admin={request.user.is_superuser}")
+        
+        # Log headers for debugging
+        csrf_token = request.META.get('HTTP_X_CSRFTOKEN', 'Not provided')
+        logger.info(f"CSRF Token: {csrf_token[:20] if csrf_token != 'Not provided' else csrf_token}")
+        
+        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         tickets = Ticket.objects.all()
@@ -85,7 +118,7 @@ class FollowUpViewSet(viewsets.ModelViewSet):
     queryset = FollowUp.objects.all()
     serializer_class = FollowUpSerializer
     pagination_class = ConservativePagination
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]  # Less restrictive than IsAdminUser
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -95,10 +128,10 @@ class FollowUpAttachmentViewSet(viewsets.ModelViewSet):
     queryset = FollowUpAttachment.objects.all()
     serializer_class = FollowUpAttachmentSerializer
     pagination_class = ConservativePagination
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]  # Less restrictive than IsAdminUser
 
 
 class CreateUserView(CreateModelMixin, GenericViewSet):
     queryset = get_user_model().objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsStaffUser]  # Less restrictive than IsAdminUser

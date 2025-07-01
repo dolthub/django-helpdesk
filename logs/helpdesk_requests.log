@@ -198,3 +198,83 @@ Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'loc
 Method: POST | Path: /api/tickets/ | User: None | IP: 127.0.0.1
 Headers: {'Content-Length': '67', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
 ---
+2025-07-01 18:56:56,615 helpdesk.requests INFO     Request: GET /api/auth/login/
+Method: GET | Path: /api/auth/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 18:56:56,630 helpdesk.requests INFO     Request: GET /helpdesk/login/
+Method: GET | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 18:57:08,277 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 19:04:56,296 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 19:05:11,944 helpdesk.requests INFO     Request: GET /api/auth/login/
+Method: GET | Path: /api/auth/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 19:05:11,959 helpdesk.requests INFO     Request: GET /helpdesk/login/
+Method: GET | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 19:05:17,232 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:09:31,534 helpdesk.requests INFO     Request: GET /helpdesk/login/
+Method: GET | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:09:31,542 helpdesk.requests INFO     Request: POST /helpdesk/login/
+Method: POST | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '54', 'Content-Type': 'application/x-www-form-urlencoded', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:13:50,335 helpdesk.requests INFO     Request: GET /helpdesk/login/
+Method: GET | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:13:50,339 helpdesk.requests INFO     Request: POST /helpdesk/login/
+Method: POST | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '54', 'Content-Type': 'application/x-www-form-urlencoded', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:15:40,265 helpdesk.requests INFO     Request: GET /api/auth/login/
+Method: GET | Path: /api/auth/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:15:40,279 helpdesk.requests INFO     Request: POST /api/auth/login/
+Method: POST | Path: /api/auth/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '86', 'Content-Type': 'application/x-www-form-urlencoded', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:15:40,392 helpdesk.requests INFO     Request: GET /api/user_tickets/
+Method: GET | Path: /api/user_tickets/ | User: {'id': 2, 'username': 'agent1', 'email': '', 'is_staff': True, 'is_superuser': False} | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'X-Csrftoken': 'ehtLm2PreO2rkLyQWwjjjcFfX1QEudB3', 'Referer': 'http://localhost:8080/api/user_tickets/', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:15:40,396 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: {'id': 2, 'username': 'agent1', 'email': '', 'is_staff': True, 'is_superuser': False} | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'X-Csrftoken': 'ehtLm2PreO2rkLyQWwjjjcFfX1QEudB3', 'Referer': 'http://localhost:8080/api/user_tickets/', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:16:27,172 helpdesk.requests INFO     Request: GET /api/auth/login/
+Method: GET | Path: /api/auth/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+---
+2025-07-01 20:16:27,174 helpdesk.requests INFO     Request: GET /helpdesk/login/
+Method: GET | Path: /helpdesk/login/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'text/plain', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:16:34,428 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:17:09,131 helpdesk.requests INFO     Request: POST /api/tickets/
+Method: POST | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '121', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---
+2025-07-01 20:17:18,955 helpdesk.requests INFO     Request: GET /api/tickets/
+Method: GET | Path: /api/tickets/ | User: None | IP: 127.0.0.1
+Headers: {'Content-Length': '', 'Content-Type': 'application/json', 'Host': 'localhost:8080', 'User-Agent': 'python-requests/2.32.4', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Authorization': '[FILTERED]', 'Cookie': '[FILTERED]'}
+---

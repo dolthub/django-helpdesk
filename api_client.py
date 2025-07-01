@@ -9,10 +9,10 @@ This script provides an interactive command line interface for the Django-Helpde
 4. Makes authenticated API requests
 
 Usage:
-    python api_login.py <host> <port> <username> <password>
+    python api_client.py <host> <port> <username> <password>
 
 Example:
-    python api_login.py localhost 8000 admin admin123
+    python api_client.py localhost 8000 admin admin123
 """
 
 import argparse
@@ -34,6 +34,7 @@ class DjangoAPIClient:
         self.password = password
         self.base_url = f"http://{host}:{port}"
         self.login_url = urljoin(self.base_url, "/api/auth/login/")
+        self.django_login_url = urljoin(self.base_url, "/helpdesk/login/")
         self.api_base_url = urljoin(self.base_url, "/api/")
         self.session = requests.Session()
         self.authenticated = False
@@ -254,10 +255,98 @@ class DjangoAPIClient:
         print(f"    {self.base_url}/api/tickets/")
         print("="*60)
 
+    def django_session_login(self):
+        """Perform Django session login via the helpdesk login form."""
+        print("🔑 Attempting Django session authentication...")
+        
+        # First get the login page to extract CSRF token
+        try:
+            login_page_response = self.session.get(self.django_login_url)
+            login_page_response.raise_for_status()
+            
+            # Extract CSRF token from the login form
+            csrf_token = None
+            if 'csrfmiddlewaretoken' in login_page_response.text:
+                import re
+                csrf_match = re.search(r'name=["\']csrfmiddlewaretoken["\'] value=["\']([^"\']+)["\']', login_page_response.text)
+                if csrf_match:
+                    csrf_token = csrf_match.group(1)
+                    print(f"CSRF token extracted from login form: {csrf_token[:20]}...")
+            
+            # Also get CSRF token from cookies
+            if 'csrftoken' in self.session.cookies:
+                csrf_token = self.session.cookies['csrftoken']
+                print(f"CSRF token from cookies: {csrf_token[:20]}...")
+            
+            if not csrf_token:
+                print("⚠️  No CSRF token found, proceeding without it")
+            
+            # Prepare login data
+            login_data = {
+                'username': self.username,
+                'password': self.password,
+            }
+            
+            if csrf_token:
+                login_data['csrfmiddlewaretoken'] = csrf_token
+            
+            # Prepare headers
+            headers = {
+                'Referer': self.django_login_url,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+            
+            if csrf_token:
+                headers['X-CSRFToken'] = csrf_token
+            
+            print(f"Submitting login form to: {self.django_login_url}")
+            
+            # Submit login form
+            login_response = self.session.post(
+                self.django_login_url,
+                data=login_data,  # Use form data, not JSON
+                headers=headers,
+                allow_redirects=False  # Don't follow redirects automatically
+            )
+            
+            print(f"Login response status: {login_response.status_code}")
+            print(f"Response headers: {dict(login_response.headers)}")
+            
+            # Check for successful login (usually a redirect)
+            if login_response.status_code in [302, 301]:
+                print("✅ Login successful (redirect detected)")
+                
+                # Check for session cookie
+                if 'sessionid' in self.session.cookies:
+                    print(f"Session ID: {self.session.cookies['sessionid'][:20]}...")
+                
+                return True
+            elif login_response.status_code == 200:
+                # Check if we're still on login page (login failed) or redirected to dashboard
+                if 'login' in login_response.url.lower() or 'password' in login_response.text.lower():
+                    print("❌ Login failed - still on login page")
+                    return False
+                else:
+                    print("✅ Login successful (200 response)")
+                    return True
+            else:
+                print(f"❌ Login failed with status {login_response.status_code}")
+                print(f"Response: {login_response.text[:200]}...")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Error during session login: {e}")
+            return False
+
     def login(self, csrf_token):
         """Perform login with CSRF token and credentials."""
-        # First try to get an auth token
-        print("🔑 Attempting to get authentication token...")
+        # Try Django session authentication first (for DRF session auth)
+        if self.django_session_login():
+            print("🎉 Using session authentication for API calls")
+            return True
+            
+        # Fall back to token authentication if session login fails
+        print("\n🔑 Session login failed, attempting token authentication...")
         if self.get_auth_token():
             return True
         
@@ -273,10 +362,12 @@ class DjangoAPIClient:
                 print(f"✅ Token set: {token[:20]}...")
                 return True
             
-        # Fall back to session-based authentication
-        print("\n🔑 Falling back to session-based authentication...")
-        print("⚠️  Note: Session auth may not work with DRF API endpoints")
-        
+        # Final fallback to old session method
+        print("\n🔑 Trying alternative session authentication...")
+        return self.old_session_login(csrf_token)
+    
+    def old_session_login(self, csrf_token):
+        """Original session login method as fallback."""
         headers = {
             'Content-Type': 'application/json',
             'Referer': self.login_url,  # Required by Django CSRF protection
@@ -464,13 +555,17 @@ class DjangoAPIClient:
             'Content-Type': 'application/json',
         }
         
-        # Add authentication - prefer token auth over session auth
-        if self.auth_token:
+        # Add authentication - prefer session auth, fallback to token auth
+        if 'sessionid' in self.session.cookies and 'csrftoken' in self.session.cookies:
+            headers['X-CSRFToken'] = self.session.cookies['csrftoken']
+            headers['Referer'] = url  # Required for CSRF protection
+            print(f"Using session authentication with CSRF token: {self.session.cookies['csrftoken'][:20]}...")
+            print(f"Session ID: {self.session.cookies['sessionid'][:20]}...")
+        elif self.auth_token:
             headers['Authorization'] = f'Token {self.auth_token}'
             print(f"Using Token authentication: Token {self.auth_token[:20]}...")
-        elif 'csrftoken' in self.session.cookies:
-            headers['X-CSRFToken'] = self.session.cookies['csrftoken']
-            print("Using session-based authentication with CSRF token")
+        else:
+            print("⚠️  No authentication credentials available")
         
         print(f"\n🌐 Making API call...")
         print(f"Method: {endpoint_info['method']}")
