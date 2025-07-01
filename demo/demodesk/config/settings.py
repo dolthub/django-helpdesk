@@ -19,6 +19,65 @@ SECRET_KEY = "_crkn1+fnzu5$vns_-d+^ayiq%z4k*s!!ag0!mfy36(y!vrazd"
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False, # Keep Django's default loggers
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+        },
+        'detailed': {
+            'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s\n'
+                     'Method: %(method)s | Path: %(path)s | User: %(user)s | IP: %(client_ip)s\n'
+                     # 'Status: %(status_code)s | Time: %(processing_time_ms)s ms\n'
+                     'Headers: %(headers)s\n'
+                     #'Body: %(body)s\n'
+                     '---'
+        },
+        'json': {
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+            'class': 'pythonjsonlogger.jsonlogger.JsonFormatter'
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+        'request_console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'detailed',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': 'logs/helpdesk_requests.log',
+            'maxBytes': 1024*1024*15,  # 15MB
+            'backupCount': 10,
+            'formatter': 'detailed',
+        },
+    },
+    'loggers': {
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'helpdesk.requests': {
+            'handlers': ['request_console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'helpdesk': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
+
 ALLOWED_HOSTS = []
 
 # SECURITY WARNING: you probably want to configure your server
@@ -51,7 +110,19 @@ INSTALLED_APPS = [
     "bootstrap4form",
     "helpdesk",  # This is us!
     "rest_framework",  # required for the API
+    "rest_framework.authtoken"
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
 if HELPDESK_TEAMS_MODE_ENABLED:
     INSTALLED_APPS.extend(
         [
@@ -70,6 +141,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "helpdesk.middleware.RequestResponseLoggingMiddleware",  # Request/Response logging
 ]
 
 ROOT_URLCONF = "demodesk.config.urls"
@@ -146,6 +218,8 @@ DATABASES = {
         'PORT': '3306',
     }
 }
+
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
 
 # Sites
@@ -241,6 +315,22 @@ FIXTURE_DIRS = [os.path.join(BASE_DIR, "fixtures")]
 
 # for Django 3.2+, set default for autofields:
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+# Request/Response Logging Middleware Configuration
+HELPDESK_LOG_PATHS = [
+    '/api/',
+    '/helpdesk/',
+]
+
+HELPDESK_LOG_SENSITIVE_HEADERS = [
+    'authorization',
+    'cookie',
+    'x-api-key',
+    'x-auth-token',
+]
+
+HELPDESK_LOG_MAX_BODY_SIZE = 10000  # 10KB
+HELPDESK_LOG_BODIES = True
 
 try:
     from .local_settings import *  # noqa
