@@ -1774,6 +1774,15 @@ class UserSettings(models.Model):
         default=use_email_as_submitter_default,
     )
 
+    is_agent = models.BooleanField(
+        verbose_name=_("Is Agent?"),
+        help_text=_(
+            "Designates whether this user is an agent who can handle tickets. "
+            "Agents have special permissions and responsibilities in the helpdesk system."
+        ),
+        default=False,
+    )
+
     def __str__(self):
         return "Preferences for %s" % self.user
 

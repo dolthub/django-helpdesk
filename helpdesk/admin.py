@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 from helpdesk import settings as helpdesk_settings
 from helpdesk.models import (
@@ -16,6 +18,7 @@ from helpdesk.models import (
     Queue,
     Ticket,
     TicketChange,
+    UserSettings,
 )
 
 
@@ -157,3 +160,27 @@ class ChecklistAdmin(admin.ModelAdmin):
 
 admin.site.register(PreSetReply)
 admin.site.register(EscalationExclusion)
+
+
+class UserSettingsInline(admin.StackedInline):
+    model = UserSettings
+    can_delete = False
+    verbose_name_plural = _("Helpdesk Settings")
+    fields = (
+        'login_view_ticketlist',
+        'email_on_ticket_change', 
+        'email_on_ticket_assign',
+        'tickets_per_page',
+        'use_email_as_submitter',
+        'is_agent',
+    )
+
+
+class HelpdeskUserAdmin(UserAdmin):
+    inlines = (UserSettingsInline,)
+
+
+# Unregister the default User admin and register our custom one
+User = get_user_model()
+admin.site.unregister(User)
+admin.site.register(User, HelpdeskUserAdmin)

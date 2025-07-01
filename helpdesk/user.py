@@ -60,6 +60,15 @@ class HelpdeskUser:
             or helpdesk_settings.HELPDESK_ALLOW_NON_STAFF_TICKET_UPDATE
         )
 
+    @property
+    def is_agent(self):
+        """Check if the user is marked as an agent in UserSettings."""
+        try:
+            return self.user.usersettings_helpdesk.is_agent
+        except AttributeError:
+            # UserSettings not created yet
+            return False
+
     def can_access_queue(self, queue):
         """Check if a certain user can access a certain queue.
 
