@@ -1,5 +1,5 @@
 """
-Django middleware for logging HTTP requests and responses.
+Django middleware for logging HTTP requests and responses, and agent access control.
 """
 
 import json
@@ -7,7 +7,8 @@ import logging
 import time
 from django.utils.deprecation import MiddlewareMixin
 from django.conf import settings
-from django.http import StreamingHttpResponse, FileResponse
+from django.contrib.auth import logout
+from django.http import StreamingHttpResponse, FileResponse, JsonResponse
 
 
 logger = logging.getLogger('helpdesk.requests')
@@ -249,3 +250,99 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
     def _is_api_endpoint(self, request):
         """Check if this is an API endpoint."""
         return request.path.startswith('/api/')
+
+
+class AgentAccessControlMiddleware(MiddlewareMixin):
+    """
+    Middleware to prevent agents (is_agent=True) from accessing the web interface.
+    Agents should only be able to use the API.
+    """
+    
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.get_response = get_response
+        
+        # Paths that agents are allowed to access (for logout, etc.)
+        self.allowed_paths = getattr(settings, 'HELPDESK_AGENT_ALLOWED_PATHS', [
+            '/api/',
+        ])
+        
+    def process_request(self, request):
+        """
+        Check if the user is an agent and block web access if necessary.
+        """
+        # Skip check for non-authenticated users
+        if not hasattr(request, 'user') or not request.user.is_authenticated:
+            return None
+            
+        # If user is not an agent do not block access
+        if not self._is_agent(request.user):
+            return None
+            
+        path = request.path_info
+        
+        # Allow API access
+        if any(path.startswith(allowed_path) for allowed_path in self.allowed_paths):
+            return None
+            
+        return self._handle_blocked_access(request)
+
+    def _is_agent(self, user):
+        """
+        Check if user is marked as an agent.
+        """
+        try:
+            return user.usersettings_helpdesk.is_agent
+        except AttributeError:
+            # UserSettings not created yet, default to False
+            return False
+
+    def _handle_blocked_access(self, request):
+        """
+        Handle blocked access for agents trying to use web interface.
+        """
+        # Log the blocked access attempt
+        logger.warning(
+            f"Agent user '{request.user.username}' attempted to access web interface at {request.path}",
+            extra={
+                'user_id': request.user.id,
+                'username': request.user.username,
+                'path': request.path,
+                'method': request.method,
+                'user_agent': request.META.get('HTTP_USER_AGENT', ''),
+                'ip_address': self._get_client_ip(request),
+            }
+        )
+        
+        # Check if this is an AJAX/API-like request
+        if (request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest' or
+            'application/json' in request.META.get('HTTP_ACCEPT', '')):
+            # Return JSON error response
+            return JsonResponse({
+                'error': 'Access denied',
+                'message': 'Agent accounts can only access the API. Web interface access is restricted.',
+                'code': 'AGENT_WEB_ACCESS_DENIED'
+            }, status=403)
+        else:
+            # Log out the user and redirect to a restricted access page
+            logout(request)
+            
+            # You could redirect to a custom page explaining the restriction
+            # For now, we'll return a simple HTTP response
+            from django.http import HttpResponse
+            return HttpResponse(
+                '<h1>Access Restricted</h1>'
+                '<p>Agent accounts can only access the API. Web interface access is not permitted.</p>'
+                '<p>Please use the API endpoints for all operations.</p>',
+                status=403,
+                content_type='text/html'
+            )
+
+    def _get_client_ip(self, request):
+        """Get the client IP address."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip

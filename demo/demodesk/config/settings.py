@@ -144,6 +144,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "helpdesk.middleware.AgentAccessControlMiddleware",  # Agent access control
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "helpdesk.middleware.RequestResponseLoggingMiddleware",  # Request/Response logging
@@ -252,6 +253,12 @@ SESSION_COOKIE_AGE = 86400  # = 1 day
 # Password validation
 # https://docs.djangoproject.com/en/1.11/ref/settings/#auth-password-validators
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'helpdesk.authentication.HelpdeskAuthenticationBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -348,6 +355,11 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with CSRF token
 # Session settings for API access  
 SESSION_COOKIE_HTTPONLY = False  # Allow API clients to access session
 SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with session
+
+# Agent Access Control Configuration
+HELPDESK_AGENT_ALLOWED_PATHS = [
+    '/api/',
+]
 
 try:
     from .local_settings import *  # noqa
