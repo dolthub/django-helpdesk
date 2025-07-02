@@ -14,6 +14,7 @@ docs/doctrees/*
 .idea
 .tox/**
 .venv
+logs/
 
 # ignore demo attachments that user might have added
 helpdesk/attachments/
