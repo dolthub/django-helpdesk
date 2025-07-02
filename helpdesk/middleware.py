@@ -394,6 +394,9 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             # Force session save to ensure persistence
             request.session.modified = True
             
+            # Create Dolt branch
+            self._create_dolt_branch(branch_name)
+            
             # Log the branch name creation
             logger.info(
                 f"Created branch name '{branch_name}' for agent user '{request.user.username}'",
@@ -425,3 +428,38 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
         Check if this is an API request.
         """
         return request.path.startswith('/api/')
+    
+    def _create_dolt_branch(self, branch_name):
+        """
+        Create a Dolt branch using the specified branch name.
+        
+        Executes: CALL dolt_branch(<branch_name>, "main");
+        """
+        from django.db import connection
+        
+        try:
+            with connection.cursor() as cursor:
+                # Execute the Dolt branch creation SQL
+                sql = 'CALL dolt_branch(%s, "main")'
+                cursor.execute(sql, [branch_name])
+                
+                logger.info(
+                    f"Successfully created Dolt branch '{branch_name}' from main",
+                    extra={
+                        'branch_name': branch_name,
+                        'sql_command': f"CALL dolt_branch('{branch_name}', \"main\")",
+                        'operation': 'dolt_branch_creation'
+                    }
+                )
+                
+        except Exception as e:
+            logger.error(
+                f"Failed to create Dolt branch '{branch_name}': {e}",
+                extra={
+                    'branch_name': branch_name,
+                    'error': str(e),
+                    'operation': 'dolt_branch_creation_failed'
+                }
+            )
+
+            raise e
