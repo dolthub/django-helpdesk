@@ -4,6 +4,8 @@ Django middleware for logging HTTP requests and responses, and agent access cont
 
 import json
 import logging
+import random
+import string
 import time
 from django.utils.deprecation import MiddlewareMixin
 from django.conf import settings
@@ -346,3 +348,80 @@ class AgentAccessControlMiddleware(MiddlewareMixin):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class AgentBranchNameMiddleware(MiddlewareMixin):
+    """
+    Middleware to create a branch name for agent users when they start a new session.
+    
+    For users where is_agent=True, when they start a new session, this middleware
+    creates a variable named "branch_name" and sets it to be <username>-<random_string_of_8_characters>
+    and stores it in the session.
+    
+    This middleware is optimized for session-based authentication for both web and API requests.
+    """
+    
+    def process_request(self, request):
+        """
+        Check if the user is an agent and create a branch name if it's a new session.
+        """
+        # Skip if user is not authenticated
+        if not hasattr(request, 'user') or not request.user.is_authenticated:
+            return None
+            
+        # Skip if user is not an agent
+        if not self._is_agent(request.user):
+            return None
+        
+        # Ensure session exists and is properly initialized
+        if not hasattr(request, 'session'):
+            return None
+        
+        # For session-based authentication, check if we need to initialize the session
+        if not request.session.session_key:
+            # Force session creation
+            request.session.cycle_key()
+            
+        # Check if branch_name is already set in session
+        if 'branch_name' not in request.session:
+            # Generate branch name: <username>-<random_string_of_8_characters>
+            random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+            branch_name = f"{request.user.username}-{random_string}"
+            
+            # Store in session
+            request.session['branch_name'] = branch_name
+            
+            # Force session save to ensure persistence
+            request.session.modified = True
+            
+            # Log the branch name creation
+            logger.info(
+                f"Created branch name '{branch_name}' for agent user '{request.user.username}'",
+                extra={
+                    'user_id': request.user.id,
+                    'username': request.user.username,
+                    'branch_name': branch_name,
+                    'session_key': request.session.session_key,
+                    'is_api_request': self._is_api_request(request),
+                    'path': request.path,
+                    'method': request.method,
+                }
+            )
+            
+        return None
+    
+    def _is_agent(self, user):
+        """
+        Check if user is marked as an agent.
+        """
+        try:
+            return user.usersettings_helpdesk.is_agent
+        except AttributeError:
+            # UserSettings not created yet, default to False
+            return False
+    
+    def _is_api_request(self, request):
+        """
+        Check if this is an API request.
+        """
+        return request.path.startswith('/api/')

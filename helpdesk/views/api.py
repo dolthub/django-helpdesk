@@ -10,6 +10,8 @@ from helpdesk.serializers import (
 from rest_framework import viewsets
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
 from django.contrib.auth.models import Permission
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -135,3 +137,54 @@ class CreateUserView(CreateModelMixin, GenericViewSet):
     queryset = get_user_model().objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsStaffUser]  # Less restrictive than IsAdminUser
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def agent_session_info(request):
+    """
+    API endpoint to get session information for agent users.
+    
+    Returns the branch_name if the user is an agent and has one set in session.
+    This is automatically created when an agent user starts a new session.
+    Now optimized for session-based authentication only.
+    """
+    # Check if user is an agent
+    try:
+        is_agent = request.user.usersettings_helpdesk.is_agent
+    except AttributeError:
+        is_agent = False
+    
+    if not is_agent:
+        return Response({
+            'error': 'Not an agent user',
+            'message': 'This endpoint is only available for agent users.'
+        }, status=403)
+    
+    # Get session information
+    branch_name = None
+    session_key = None
+    session_available = False
+    
+    if hasattr(request, 'session'):
+        session_available = True
+        session_key = request.session.session_key
+        
+        # The middleware should have already created the branch name
+        # But if not, we can trigger it manually
+        if 'branch_name' not in request.session:
+            from helpdesk.middleware import AgentBranchNameMiddleware
+            middleware = AgentBranchNameMiddleware(None)
+            middleware.process_request(request)
+        
+        branch_name = request.session.get('branch_name')
+    
+    return Response({
+        'user_id': request.user.id,
+        'username': request.user.username,
+        'is_agent': is_agent,
+        'branch_name': branch_name,
+        'session_key': session_key,
+        'session_available': session_available,
+        'authentication_method': 'session',
+    })

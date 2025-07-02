@@ -34,7 +34,7 @@ class DjangoAPIClient:
         self.password = password
         self.base_url = f"http://{host}:{port}"
         self.login_url = urljoin(self.base_url, "/api/auth/login/")
-        self.django_login_url = urljoin(self.base_url, "/helpdesk/login/")
+        self.django_login_url = urljoin(self.base_url, "/login/")
         self.api_base_url = urljoin(self.base_url, "/api/")
         self.session = requests.Session()
         self.authenticated = False
@@ -134,6 +134,14 @@ class DjangoAPIClient:
                     'description': 'Health check endpoint',
                     'params': {}
                 }
+            },
+            'session': {
+                'agent_info': {
+                    'method': 'GET',
+                    'path': 'agent-session-info/',
+                    'description': 'Get current agent session information (branch name, etc.)',
+                    'params': {}
+                }
             }
         }
         
@@ -177,82 +185,31 @@ class DjangoAPIClient:
             return None
     
     def get_auth_token(self):
-        """Get authentication token using Django REST Framework token endpoint."""
-        token_url = urljoin(self.base_url, "/api-auth-token/")
-        
-        # Try different token endpoints
-        token_endpoints = [
-            "/api-token-auth/",
-            "/api-auth-token/",
-            "/api/auth-token/", 
-            "/auth/token/",
-            "/api/token/"
-        ]
-        
-        for endpoint in token_endpoints:
-            url = urljoin(self.base_url, endpoint)
-            print(f"Trying token endpoint: {url}")
-            
-            try:
-                response = self.session.post(
-                    url,
-                    json={
-                        'username': self.username,
-                        'password': self.password
-                    },
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                print(f"Token endpoint response: {response.status_code}")
-                
-                if response.status_code == 200:
-                    try:
-                        token_data = response.json()
-                        if 'token' in token_data:
-                            self.auth_token = token_data['token']
-                            print(f"✅ Token obtained: {self.auth_token[:20]}...")
-                            return True
-                    except json.JSONDecodeError:
-                        pass
-                        
-            except requests.exceptions.RequestException as e:
-                print(f"Error trying {url}: {e}")
-                continue
-        
+        """Token authentication is disabled. This method is no longer used."""
+        print("🚫 Token authentication is disabled")
         return False
 
-    def show_token_creation_help(self):
-        """Show instructions for creating authentication tokens."""
+    def show_session_auth_help(self):
+        """Show instructions for session-based authentication."""
         print("\n" + "="*60)
-        print("🔑 AUTHENTICATION TOKEN REQUIRED")
+        print("🔑 SESSION AUTHENTICATION")
         print("="*60)
-        print("The Django-Helpdesk API requires token authentication.")
-        print("Here are several ways to create an authentication token:")
+        print("The Django-Helpdesk API now uses session-based authentication only.")
+        print("Token authentication has been disabled.")
         print()
-        print("METHOD 1: Using the provided script")
-        print("  python create_token.py admin")
+        print("Session authentication works by:")
+        print("1. Logging in through the web interface or API login endpoint")
+        print("2. Receiving session cookies that authenticate subsequent API calls")
+        print("3. Using those cookies for all API requests")
         print()
-        print("METHOD 2: Using Django shell")
-        print("  python demo/manage.py shell")
-        print("  >>> from django.contrib.auth.models import User")
-        print("  >>> from rest_framework.authtoken.models import Token")
-        print("  >>> user = User.objects.get(username='admin')")
-        print("  >>> token, created = Token.objects.get_or_create(user=user)")
-        print("  >>> print(f'Token: {token.key}')")
+        print("For API clients:")
+        print("- Use the Django login form at /helpdesk/login/")
+        print("- Extract and store session cookies (sessionid, csrftoken)")
+        print("- Include those cookies in subsequent API requests")
         print()
-        print("METHOD 3: Using Django admin")
-        print("  1. Go to http://localhost:8000/admin/")
-        print("  2. Navigate to Authentication and Authorization > Tokens")
-        print("  3. Click 'Add Token' and select your user")
-        print()
-        print("METHOD 4: Using curl (if token endpoint is available)")
-        print(f"  curl -X POST {self.base_url}/api-token-auth/ \\")
-        print("    -H 'Content-Type: application/json' \\")
-        print(f"    -d '{{\"username\": \"{self.username}\", \"password\": \"your_password\"}}'")
-        print()
-        print("Once you have a token, you can use it directly:")
-        print("  curl -H 'Authorization: Token your_token_here' \\")
-        print(f"    {self.base_url}/api/tickets/")
+        print("Agent users (is_agent=True) will automatically get:")
+        print("- A unique branch name stored in their session")
+        print("- Access to the /api/agent-session-info/ endpoint")
         print("="*60)
 
     def django_session_login(self):
@@ -339,28 +296,14 @@ class DjangoAPIClient:
             return False
 
     def login(self, csrf_token):
-        """Perform login with CSRF token and credentials."""
-        # Try Django session authentication first (for DRF session auth)
+        """Perform login with CSRF token and credentials (session-only)."""
+        # Try Django session authentication
         if self.django_session_login():
             print("🎉 Using session authentication for API calls")
             return True
             
-        # Fall back to token authentication if session login fails
-        print("\n🔑 Session login failed, attempting token authentication...")
-        if self.get_auth_token():
-            return True
-        
-        # Show token creation help if no token endpoint found
-        self.show_token_creation_help()
-        
-        # Ask user if they want to enter a token manually
-        manual_token = input("\nDo you have an authentication token to enter manually? (y/N): ").strip().lower()
-        if manual_token in ('y', 'yes'):
-            token = input("Enter your authentication token: ").strip()
-            if token:
-                self.auth_token = token
-                print(f"✅ Token set: {token[:20]}...")
-                return True
+        # Show session authentication help
+        self.show_session_auth_help()
             
         # Final fallback to old session method
         print("\n🔑 Trying alternative session authentication...")
@@ -541,6 +484,31 @@ class DjangoAPIClient:
         
         return params, path_params, query_params
     
+    def display_agent_session_info(self, response_data):
+        """Special display for agent session information."""
+        print("\n" + "="*60)
+        print("🤖 AGENT SESSION INFORMATION")
+        print("="*60)
+        
+        if 'error' in response_data:
+            print(f"❌ Error: {response_data['error']}")
+            print(f"   Message: {response_data.get('message', 'No additional details')}")
+            return
+        
+        print(f"👤 User ID: {response_data.get('user_id', 'N/A')}")
+        print(f"👤 Username: {response_data.get('username', 'N/A')}")
+        print(f"🤖 Is Agent: {response_data.get('is_agent', 'N/A')}")
+        print(f"🌿 Branch Name: {response_data.get('branch_name', 'Not set')}")
+        print(f"🔑 Session Key: {response_data.get('session_key', 'N/A')}")
+        
+        if response_data.get('branch_name'):
+            print(f"\n📋 Usage Examples:")
+            print(f"   Git Branch: git checkout -b {response_data['branch_name']}")
+            print(f"   Workspace: mkdir workspace-{response_data['branch_name']}")
+            print(f"   Log Context: [Agent: {response_data['username']}, Branch: {response_data['branch_name']}]")
+        
+        print("="*60)
+
     def make_api_call(self, endpoint_info, params, path_params, query_params):
         """Make the actual API call."""
         # Build the URL
@@ -600,7 +568,12 @@ class DjangoAPIClient:
             # Try to display JSON response
             try:
                 response_data = response.json()
-                print(f"Response Body: {json.dumps(response_data, indent=2)}")
+                
+                # Special handling for agent session info
+                if endpoint_info['path'] == 'agent-session-info/':
+                    self.display_agent_session_info(response_data)
+                else:
+                    print(f"Response Body: {json.dumps(response_data, indent=2)}")
             except json.JSONDecodeError:
                 print(f"Response Text: {response.text}")
             
@@ -615,6 +588,15 @@ class DjangoAPIClient:
         except requests.exceptions.RequestException as e:
             print(f"❌ API call failed: {e}")
             return False
+    
+    def get_agent_session_info(self):
+        """Quick method to get and display agent session information."""
+        print("🔍 Fetching current agent session information...")
+        
+        endpoint_info = self.api_endpoints['session']['agent_info']
+        success = self.make_api_call(endpoint_info, {}, {}, {})
+        
+        return success
     
     def interactive_mode(self):
         """Run the interactive API client."""
@@ -696,11 +678,15 @@ Examples:
   %(prog)s localhost 8000 admin admin123
   %(prog)s 127.0.0.1 8080 user@example.com mypassword
   %(prog)s api.example.com 443 staff_user secure_pass
+  
+Quick Agent Info Check:
+  %(prog)s localhost 8000 agent_user password123 --agent-info
 
 Available API Operations:
   - List/Create/Update/Delete tickets
   - List user tickets
   - Create follow-ups
+  - Get agent session information (branch name, etc.)
   - Health check
         """
     )
@@ -714,6 +700,12 @@ Available API Operations:
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose output'
+    )
+    
+    parser.add_argument(
+        '--agent-info', '-a',
+        action='store_true',
+        help='Get agent session information and exit'
     )
     
     args = parser.parse_args()
@@ -730,6 +722,12 @@ Available API Operations:
         
         if success:
             client.authenticated = True
+            
+            # Check if user wants agent info only
+            if args.agent_info:
+                success = client.get_agent_session_info()
+                sys.exit(0 if success else 1)
+            
             # Start interactive mode
             client.interactive_mode()
             sys.exit(0)  # Success

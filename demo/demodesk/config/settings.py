@@ -83,7 +83,7 @@ LOGGING = {
     },
 }
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1']
 
 # SECURITY WARNING: you probably want to configure your server
 # to use HTTPS with secure cookies, then you'd want to set
@@ -115,13 +115,13 @@ INSTALLED_APPS = [
     "bootstrap4form",
     "helpdesk",  # This is us!
     "rest_framework",  # required for the API
-    "rest_framework.authtoken"
+    # "rest_framework.authtoken"  # Disabled token authentication
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
+        # 'rest_framework.authentication.TokenAuthentication',  # Disabled
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -144,6 +144,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "helpdesk.middleware.AgentBranchNameMiddleware",  # Agent branch name creation
     "helpdesk.middleware.AgentAccessControlMiddleware",  # Agent access control
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -225,7 +226,7 @@ DATABASES = {
     }
 }
 
-SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 
 # Sites
@@ -241,6 +242,7 @@ SITE_ID = 1
 # https://docs.djangoproject.com/en/1.11/topics/http/sessions
 
 SESSION_COOKIE_AGE = 86400  # = 1 day
+SESSION_SAVE_EVERY_REQUEST = True  # Ensure sessions are saved for API requests
 
 # For better default security, set these cookie flags, but
 # these are likely to cause problems when testing locally

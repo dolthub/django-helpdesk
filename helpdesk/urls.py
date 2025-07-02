@@ -20,6 +20,7 @@ from helpdesk.views.api import (
     FollowUpViewSet,
     TicketViewSet,
     UserTicketViewSet,
+    agent_session_info,
 )
 from rest_framework.routers import DefaultRouter
 
@@ -222,7 +223,10 @@ router.register(
     r"followups-attachments", FollowUpAttachmentViewSet, basename="followupattachments"
 )
 router.register(r"users", CreateUserView, basename="user")
-urlpatterns += [path("api/", include(router.urls))]
+urlpatterns += [
+    path("api/", include(router.urls)),
+    path("api/agent-session-info/", agent_session_info, name="agent_session_info"),
+]
 
 
 urlpatterns += [
