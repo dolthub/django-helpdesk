@@ -139,7 +139,21 @@ class DjangoAPIClient:
                 'agent_info': {
                     'method': 'GET',
                     'path': 'agent-session-info/',
-                    'description': 'Get current agent session information (branch name, etc.)',
+                    'description': 'Get current agent session information (branch name, intent, etc.)',
+                    'params': {}
+                },
+                'set_intent': {
+                    'method': 'POST',
+                    'path': 'set-agent-intent/',
+                    'description': 'Set agent session intent (max 512 characters)',
+                    'params': {
+                        'intent': {'type': 'string', 'required': True, 'description': 'Agent intent (max 512 chars)'}
+                    }
+                },
+                'finish_session': {
+                    'method': 'POST',
+                    'path': 'finish-agent-session/',
+                    'description': 'Finish agent session and perform cleanup',
                     'params': {}
                 }
             }
@@ -499,6 +513,9 @@ class DjangoAPIClient:
         print(f"👤 Username: {response_data.get('username', 'N/A')}")
         print(f"🤖 Is Agent: {response_data.get('is_agent', 'N/A')}")
         print(f"🌿 Branch Name: {response_data.get('branch_name', 'Not set')}")
+        intent = response_data.get('intent')
+        intent_display = 'Not set' if intent is None else intent
+        print(f"🎯 Intent: {intent_display}")
         print(f"🔑 Session Key: {response_data.get('session_key', 'N/A')}")
         
         if response_data.get('branch_name'):

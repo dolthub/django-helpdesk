@@ -463,3 +463,131 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             )
 
             raise e
+
+
+class AgentSessionTimeoutMiddleware(MiddlewareMixin):
+    """
+    Middleware to detect and handle agent session timeouts.
+    
+    This middleware tracks agent sessions and calls on_session_finished
+    when a session expires or when a new session is detected for a user
+    who had a previous session.
+    """
+    
+    def process_request(self, request):
+        """
+        Check for session timeouts and handle session lifecycle.
+        """
+        # Skip if user is not authenticated
+        if not hasattr(request, 'user') or not request.user.is_authenticated:
+            return None
+            
+        # Skip if user is not an agent
+        if not self._is_agent(request.user):
+            return None
+        
+        # Skip if no session
+        if not hasattr(request, 'session'):
+            return None
+            
+        current_session_key = request.session.session_key
+        user_id = request.user.id
+        
+        # Check if we have a record of this user's previous session
+        previous_session_data = self._get_previous_session_data(user_id)
+        
+        if previous_session_data:
+            previous_session_key = previous_session_data.get('session_key')
+            
+            # If session key changed, the previous session has expired/ended
+            if previous_session_key and previous_session_key != current_session_key:
+                # Previous session has ended, call cleanup
+                self._handle_session_timeout(
+                    request.user,
+                    previous_session_data.get('session_key'),
+                    previous_session_data.get('branch_name'),
+                    previous_session_data.get('intent')
+                )
+        
+        # Update current session tracking
+        if current_session_key:
+            self._update_session_tracking(
+                user_id,
+                current_session_key,
+                request.session.get('branch_name'),
+                request.session.get('intent')
+            )
+        
+        return None
+    
+    def _is_agent(self, user):
+        """Check if user is marked as an agent."""
+        try:
+            return user.usersettings_helpdesk.is_agent
+        except AttributeError:
+            return False
+    
+    def _get_previous_session_data(self, user_id):
+        """
+        Get previous session data for a user.
+        
+        In a production system, this would query a database table.
+        For now, we'll use Django's cache framework as a simple implementation.
+        """
+        from django.core.cache import cache
+        cache_key = f"agent_session_tracking_{user_id}"
+        return cache.get(cache_key)
+    
+    def _update_session_tracking(self, user_id, session_key, branch_name, intent):
+        """
+        Update session tracking data for a user.
+        
+        Stores current session information for timeout detection.
+        """
+        from django.core.cache import cache
+        cache_key = f"agent_session_tracking_{user_id}"
+        
+        session_data = {
+            'session_key': session_key,
+            'branch_name': branch_name,
+            'intent': intent,
+            'last_seen': time.time()
+        }
+        
+        # Store for 25 hours (slightly longer than session timeout)
+        cache.set(cache_key, session_data, 90000)  # 25 hours in seconds
+    
+    def _handle_session_timeout(self, user, session_key, branch_name, intent):
+        """
+        Handle session timeout by calling the cleanup function.
+        """
+        try:
+            # Import here to avoid circular imports
+            from helpdesk.views.api import on_session_finished
+            
+            logger.info(
+                f"Detected session timeout for agent user '{user.username}'",
+                extra={
+                    'user_id': user.id,
+                    'username': user.username,
+                    'expired_session_key': session_key,
+                    'branch_name': branch_name,
+                    'intent': intent,
+                    'operation': 'agent_session_timeout_detected'
+                }
+            )
+            
+            # Call the session finished handler
+            on_session_finished(user, session_key, branch_name, intent)
+            
+        except Exception as e:
+            logger.error(
+                f"Error handling session timeout for user '{user.username}': {e}",
+                extra={
+                    'user_id': user.id,
+                    'username': user.username,
+                    'expired_session_key': session_key,
+                    'error': str(e),
+                    'operation': 'agent_session_timeout_error'
+                }
+            )

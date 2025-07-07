@@ -145,6 +145,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "helpdesk.middleware.AgentBranchNameMiddleware",  # Agent branch name creation
+    "helpdesk.middleware.AgentSessionTimeoutMiddleware",  # Agent session timeout detection
     "helpdesk.middleware.AgentAccessControlMiddleware",  # Agent access control
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

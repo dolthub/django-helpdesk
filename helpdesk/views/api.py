@@ -1,4 +1,4 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, logout
 from helpdesk.models import FollowUp, FollowUpAttachment, Ticket
 from helpdesk.serializers import (
     FollowUpAttachmentSerializer,
@@ -179,12 +179,253 @@ def agent_session_info(request):
         
         branch_name = request.session.get('branch_name')
     
+    # Get intent from session
+    intent = request.session.get('intent') if hasattr(request, 'session') else None
+    
     return Response({
         'user_id': request.user.id,
         'username': request.user.username,
         'is_agent': is_agent,
         'branch_name': branch_name,
+        'intent': intent,
         'session_key': session_key,
         'session_available': session_available,
         'authentication_method': 'session',
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_agent_intent(request):
+    """
+    API endpoint to set the intent session variable for agent users.
+    
+    Accepts:
+    - intent: string (max 512 characters)
+    
+    Only available for agent users.
+    """
+    # Check if user is an agent
+    try:
+        is_agent = request.user.usersettings_helpdesk.is_agent
+    except AttributeError:
+        is_agent = False
+    
+    if not is_agent:
+        return Response({
+            'error': 'Not an agent user',
+            'message': 'This endpoint is only available for agent users.'
+        }, status=403)
+    
+    # Check if session is available
+    if not hasattr(request, 'session'):
+        return Response({
+            'error': 'Session not available',
+            'message': 'Session is required to set intent.'
+        }, status=400)
+    
+    # Get intent from request data
+    intent = request.data.get('intent')
+    
+    if intent is None:
+        return Response({
+            'error': 'Intent required',
+            'message': 'The intent field is required.'
+        }, status=400)
+    
+    # Validate intent is a string
+    if not isinstance(intent, str):
+        return Response({
+            'error': 'Invalid intent type',
+            'message': 'Intent must be a string.'
+        }, status=400)
+    
+    # Validate intent length (max 512 characters)
+    if len(intent) > 512:
+        return Response({
+            'error': 'Intent too long',
+            'message': 'Intent must be 512 characters or less.'
+        }, status=400)
+    
+    # Set intent in session
+    request.session['intent'] = intent
+    request.session.modified = True
+    
+    return Response({
+        'success': True,
+        'message': 'Intent set successfully',
+        'intent': intent,
+        'user_id': request.user.id,
+        'username': request.user.username,
+        'branch_name': request.session.get('branch_name'),
+        'session_key': request.session.session_key
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def finish_agent_session(request):
+    """
+    API endpoint to manually finish an agent session.
+    
+    This will call the on_session_finished method to perform cleanup
+    and then clear the session data.
+    
+    Only available for agent users.
+    """
+    # Check if user is an agent
+    try:
+        is_agent = request.user.usersettings_helpdesk.is_agent
+    except AttributeError:
+        is_agent = False
+    
+    if not is_agent:
+        return Response({
+            'error': 'Not an agent user',
+            'message': 'This endpoint is only available for agent users.'
+        }, status=403)
+    
+    # Check if session is available
+    if not hasattr(request, 'session'):
+        return Response({
+            'error': 'Session not available',
+            'message': 'No active session found.'
+        }, status=400)
+    
+    # Get session data before clearing
+    branch_name = request.session.get('branch_name')
+    intent = request.session.get('intent')
+    session_key = request.session.session_key
+    
+    # Call the session finished handler
+    try:
+        on_session_finished(request.user, session_key, branch_name, intent)
+        
+        # Clear session data
+        if 'branch_name' in request.session:
+            del request.session['branch_name']
+        if 'intent' in request.session:
+            del request.session['intent']
+        request.session.modified = True
+        
+        # Prepare response data before logout
+        response_data = {
+            'success': True,
+            'message': 'Session finished successfully',
+            'user_id': request.user.id,
+            'username': request.user.username,
+            'session_key': session_key,
+            'branch_name': branch_name,
+            'intent': intent
+        }
+        
+        # Log out the user
+        logout(request)
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        return Response({
+            'error': 'Session finish failed',
+            'message': f'Error during session cleanup: {str(e)}'
+        }, status=500)
+
+
+def on_session_finished(user, session_key, branch_name=None, intent=None):
+    """
+    Handler called when an agent session is finished (manually or via timeout).
+    
+    This method performs cleanup operations when an agent session ends.
+    
+    Args:
+        user: The User object
+        session_key: The session key that was finished
+        branch_name: The branch name that was used (if any)
+        intent: The intent that was set (if any)
+    """
+    import logging
+    logger = logging.getLogger('helpdesk.requests')
+    
+    try:
+        # Check if user is an agent
+        try:
+            is_agent = user.usersettings_helpdesk.is_agent
+        except AttributeError:
+            is_agent = False
+        
+        if not is_agent:
+            return  # Not an agent, nothing to do
+        
+        # Log session finish
+        logger.info(
+            f"Agent session finished for user '{user.username}'",
+            extra={
+                'user_id': user.id,
+                'username': user.username,
+                'session_key': session_key,
+                'branch_name': branch_name,
+                'intent': intent,
+                'operation': 'agent_session_finished'
+            }
+        )
+        
+        _call_finish_session_stored_proc(branch_name, intent)
+        
+        # For now, we'll just log the completion
+        logger.info(
+            f"Session cleanup completed for agent '{user.username}' with branch '{branch_name}'",
+            extra={
+                'user_id': user.id,
+                'username': user.username,
+                'session_key': session_key,
+                'branch_name': branch_name,
+                'intent': intent,
+                'operation': 'agent_session_cleanup_completed'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(
+            f"Error during session cleanup for user '{user.username}': {e}",
+            extra={
+                'user_id': user.id,
+                'username': user.username,
+                'session_key': session_key,
+                'branch_name': branch_name,
+                'intent': intent,
+                'error': str(e),
+                'operation': 'agent_session_cleanup_failed'
+            }
+        )
+
+def _call_finish_session_stored_proc(branch_name, intent):
+    import logging
+    from django.db import connection
+
+    logger = logging.getLogger('helpdesk.requests')
+
+    try:
+        with connection.cursor() as cursor:
+            sql = 'CALL FinishSession(%s, %s)'
+            cursor.execute(sql, [branch_name, intent])
+
+            logger.info(
+                "Successfully finished session  for branch " + branch_name,
+                extra={
+                    'branch_name': branch_name,
+                    'intent': intent,
+                    'operation': 'Call FinishSession stored procedure'
+                }
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to create Dolt branch '{branch_name}': {e}",
+            extra={
+                'branch_name': branch_name,
+                'error': str(e),
+                'operation': 'dolt_branch_creation_failed'
+            }
+        )
+
+        raise e

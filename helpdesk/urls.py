@@ -21,6 +21,8 @@ from helpdesk.views.api import (
     TicketViewSet,
     UserTicketViewSet,
     agent_session_info,
+    set_agent_intent,
+    finish_agent_session,
 )
 from rest_framework.routers import DefaultRouter
 
@@ -226,6 +228,8 @@ router.register(r"users", CreateUserView, basename="user")
 urlpatterns += [
     path("api/", include(router.urls)),
     path("api/agent-session-info/", agent_session_info, name="agent_session_info"),
+    path("api/set-agent-intent/", set_agent_intent, name="set_agent_intent"),
+    path("api/finish-agent-session/", finish_agent_session, name="finish_agent_session"),
 ]
 
 
