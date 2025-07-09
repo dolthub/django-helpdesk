@@ -38,5 +38,5 @@ BEGIN
   END IF;
 END
 '''
-        )
+        ), migrations.RunSQL(sql='''CALL dolt_commit('-Am', 'created FinishSession stored proc');'''),
     ]

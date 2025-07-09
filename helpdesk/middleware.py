@@ -16,6 +16,16 @@ from django.http import StreamingHttpResponse, FileResponse, JsonResponse
 logger = logging.getLogger('helpdesk.requests')
 
 
+def _get_client_ip(request):
+    """Get the client IP address."""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
 class RequestResponseLoggingMiddleware(MiddlewareMixin):
     """
     Middleware to log HTTP requests and responses for django-helpdesk.
@@ -84,7 +94,7 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
         """Log request details."""
         try:
             # Get client IP
-            client_ip = self._get_client_ip(request)
+            client_ip = _get_client_ip(request)
             
             # Get user info
             user_info = self._get_user_info(request)
@@ -97,15 +107,12 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
             if self.log_bodies and request.method in ['POST', 'PUT', 'PATCH']:
                 body = self._get_request_body(request)
 
-            print(self.log_bodies)
-            print(body)
-            
             log_data = {
                 'type': 'request',
                 'method': request.method,
                 'path': request.path,
                 'query_params': dict(request.GET),
-                'user': user_info,
+                'user': user_info or 'Anonymous',
                 'client_ip': client_ip,
                 'headers': headers,
                 'content_type': request.content_type,
@@ -114,13 +121,19 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
             
             if body is not None:
                 log_data['body'] = body
-
-            print(log_data)
                 
             logger.info(f"Request: {request.method} {request.path}", extra=log_data)
             
         except Exception as e:
-            logger.error(f"Error logging request: {e}")
+            # Use a minimal extra dict for error logging to avoid formatter issues
+            error_extra = {
+                'method': getattr(request, 'method', 'UNKNOWN'),
+                'path': getattr(request, 'path', 'UNKNOWN'),
+                'user': 'Error',
+                'client_ip': _get_client_ip(request),
+                'headers': {}
+            }
+            logger.error(f"Error logging request: {e}", extra=error_extra)
 
     def _log_response(self, request, response):
         """Log response details."""
@@ -138,10 +151,16 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
             if self.log_bodies and self._is_api_endpoint(request):
                 body = self._get_response_body(response)
             
+            # Get user info for logging
+            user_info = self._get_user_info(request)
+            client_ip = _get_client_ip(request)
+            
             log_data = {
                 'type': 'response',
                 'method': request.method,
                 'path': request.path,
+                'user': user_info or 'Anonymous',
+                'client_ip': client_ip,
                 'status_code': response.status_code,
                 'headers': headers,
                 'content_type': response.get('Content-Type'),
@@ -161,16 +180,15 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
             #    logger.info(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
                 
         except Exception as e:
-            logger.error(f"Error logging response: {e}")
-
-    def _get_client_ip(self, request):
-        """Get the client IP address."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+            # Use a minimal extra dict for error logging to avoid formatter issues
+            error_extra = {
+                'method': getattr(request, 'method', 'UNKNOWN'),
+                'path': getattr(request, 'path', 'UNKNOWN'),
+                'user': 'Error',
+                'client_ip': _get_client_ip(request),
+                'headers': {}
+            }
+            logger.error(f"Error logging response: {e}", extra=error_extra)
 
     def _get_user_info(self, request):
         """Get user information from the request."""
@@ -307,12 +325,14 @@ class AgentAccessControlMiddleware(MiddlewareMixin):
         logger.warning(
             f"Agent user '{request.user.username}' attempted to access web interface at {request.path}",
             extra={
+                'method': request.method,
+                'path': request.path,
+                'user': f"{request.user.username} (ID: {request.user.id})",
+                'client_ip': _get_client_ip(request),
+                'headers': {},
                 'user_id': request.user.id,
                 'username': request.user.username,
-                'path': request.path,
-                'method': request.method,
                 'user_agent': request.META.get('HTTP_USER_AGENT', ''),
-                'ip_address': self._get_client_ip(request),
             }
         )
         
@@ -340,14 +360,6 @@ class AgentAccessControlMiddleware(MiddlewareMixin):
                 content_type='text/html'
             )
 
-    def _get_client_ip(self, request):
-        """Get the client IP address."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class AgentBranchNameMiddleware(MiddlewareMixin):
@@ -401,13 +413,16 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             logger.info(
                 f"Created branch name '{branch_name}' for agent user '{request.user.username}'",
                 extra={
+                    'method': request.method,
+                    'path': request.path,
+                    'user': f"{request.user.username} (ID: {request.user.id})",
+                    'client_ip': _get_client_ip(request),
+                    'headers': {},
                     'user_id': request.user.id,
                     'username': request.user.username,
                     'branch_name': branch_name,
                     'session_key': request.session.session_key,
                     'is_api_request': self._is_api_request(request),
-                    'path': request.path,
-                    'method': request.method,
                 }
             )
 
@@ -450,6 +465,11 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                 logger.info(
                     f"Successfully created Dolt branch '{branch_name}' from main",
                     extra={
+                        'method': 'INTERNAL',
+                        'path': '/dolt/branch',
+                        'user': 'System',
+                        'client_ip': 'localhost',
+                        'headers': {},
                         'branch_name': branch_name,
                         'sql_command': f"CALL dolt_branch('{branch_name}', \"main\")",
                         'operation': 'dolt_branch_creation'
@@ -460,6 +480,11 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             logger.error(
                 f"Failed to create Dolt branch '{branch_name}': {e}",
                 extra={
+                    'method': 'INTERNAL',
+                    'path': '/dolt/branch',
+                    'user': 'System',
+                    'client_ip': 'localhost',
+                    'headers': {},
                     'branch_name': branch_name,
                     'error': str(e),
                     'operation': 'dolt_branch_creation_failed'
@@ -485,6 +510,11 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                 logger.info(
                     f"Successfully checked out Dolt branch '{branch_name}'",
                     extra={
+                        'method': 'INTERNAL',
+                        'path': '/dolt/checkout',
+                        'user': 'System',
+                        'client_ip': 'localhost',
+                        'headers': {},
                         'branch_name': branch_name,
                         'sql_command': f"CALL dolt_checkout('{branch_name}')",
                         'operation': 'dolt_checkout'
@@ -495,6 +525,11 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             logger.error(
                 f"Failed to checkout Dolt branch '{branch_name}': {e}",
                 extra={
+                    'method': 'INTERNAL',
+                    'path': '/dolt/checkout',
+                    'user': 'System',
+                    'client_ip': 'localhost',
+                    'headers': {},
                     'branch_name': branch_name,
                     'error': str(e),
                     'operation': 'dolt_checkout'
@@ -607,6 +642,11 @@ class AgentSessionTimeoutMiddleware(MiddlewareMixin):
             logger.info(
                 f"Detected session timeout for agent user '{user.username}'",
                 extra={
+                    'method': 'TIMEOUT',
+                    'path': '/session/timeout',
+                    'user': f"{user.username} (ID: {user.id})",
+                    'client_ip': 'timeout',
+                    'headers': {},
                     'user_id': user.id,
                     'username': user.username,
                     'expired_session_key': session_key,
@@ -623,6 +663,11 @@ class AgentSessionTimeoutMiddleware(MiddlewareMixin):
             logger.error(
                 f"Error handling session timeout for user '{user.username}': {e}",
                 extra={
+                    'method': 'TIMEOUT',
+                    'path': '/session/timeout',
+                    'user': f"{user.username} (ID: {user.id})",
+                    'client_ip': 'timeout',
+                    'headers': {},
                     'user_id': user.id,
                     'username': user.username,
                     'expired_session_key': session_key,
