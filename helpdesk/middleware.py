@@ -410,6 +410,10 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                     'method': request.method,
                 }
             )
+
+        if 'branch_name' in request.session:
+            branch_name = request.session['branch_name']
+            self._checkout_dolt_branch(branch_name)
             
         return None
     
@@ -428,7 +432,7 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
         Check if this is an API request.
         """
         return request.path.startswith('/api/')
-    
+
     def _create_dolt_branch(self, branch_name):
         """
         Create a Dolt branch using the specified branch name.
@@ -436,13 +440,13 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
         Executes: CALL dolt_branch(<branch_name>, "main");
         """
         from django.db import connection
-        
+
         try:
             with connection.cursor() as cursor:
                 # Execute the Dolt branch creation SQL
                 sql = 'CALL dolt_branch(%s, "main")'
                 cursor.execute(sql, [branch_name])
-                
+
                 logger.info(
                     f"Successfully created Dolt branch '{branch_name}' from main",
                     extra={
@@ -451,7 +455,7 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                         'operation': 'dolt_branch_creation'
                     }
                 )
-                
+
         except Exception as e:
             logger.error(
                 f"Failed to create Dolt branch '{branch_name}': {e}",
@@ -459,6 +463,41 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                     'branch_name': branch_name,
                     'error': str(e),
                     'operation': 'dolt_branch_creation_failed'
+                }
+            )
+
+            raise e
+
+    def _checkout_dolt_branch(self, branch_name):
+        """
+        Checkout the specified branch name.
+
+        Executes: CALL dolt_checkout(<branch_name>);
+        """
+
+        from django.db import connection
+
+        try:
+            with connection.cursor() as cursor:
+                sql = 'CALL dolt_checkout(%s)'
+                cursor.execute(sql, [branch_name])
+
+                logger.info(
+                    f"Successfully checked out Dolt branch '{branch_name}'",
+                    extra={
+                        'branch_name': branch_name,
+                        'sql_command': f"CALL dolt_checkout('{branch_name}')",
+                        'operation': 'dolt_checkout'
+                    }
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to checkout Dolt branch '{branch_name}': {e}",
+                extra={
+                    'branch_name': branch_name,
+                    'error': str(e),
+                    'operation': 'dolt_checkout'
                 }
             )
 
