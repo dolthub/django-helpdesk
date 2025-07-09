@@ -8,6 +8,7 @@ This MCP server exposes the django-helpdesk API to AI agents, providing tools fo
 - Adding follow-ups to tickets
 - Managing ticket status and assignments
 - Retrieving ticket details
+- Agent session management (branch names, intents, session lifecycle)
 """
 
 import asyncio
@@ -15,6 +16,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urljoin
+import re
 
 import httpx
 from mcp.server import Server
@@ -36,17 +38,15 @@ class HelpdeskConfig(BaseModel):
         default="http://localhost:8080",
         description="Base URL of the Django Helpdesk instance"
     )
+    username: str = Field(
+        description="Username for session authentication"
+    )
+    password: str = Field(
+        description="Password for session authentication"
+    )
     api_token: Optional[str] = Field(
         default=None,
-        description="API token for authentication (if using token auth)"
-    )
-    username: Optional[str] = Field(
-        default=None,
-        description="Username for basic auth"
-    )
-    password: Optional[str] = Field(
-        default=None,
-        description="Password for basic auth"
+        description="API token for authentication (deprecated - use session auth)"
     )
 
 
@@ -57,30 +57,114 @@ class HelpdeskMCPServer:
         self.server = Server("django-helpdesk")
         self.config = self._load_config()
         self.client = httpx.AsyncClient()
+        self.authenticated = False
+        self.session_info = None
+        self.csrf_token = None
         self._setup_handlers()
     
     def _load_config(self) -> HelpdeskConfig:
         """Load configuration from environment variables"""
+        username = os.getenv("HELPDESK_USERNAME")
+        password = os.getenv("HELPDESK_PASSWORD")
+        
+        if not username or not password:
+            raise ValueError("HELPDESK_USERNAME and HELPDESK_PASSWORD environment variables are required")
+            
         return HelpdeskConfig(
             base_url=os.getenv("HELPDESK_BASE_URL", "http://localhost:8080"),
+            username=username,
+            password=password,
             api_token=os.getenv("HELPDESK_API_TOKEN"),
-            username=os.getenv("HELPDESK_USERNAME"),
-            password=os.getenv("HELPDESK_PASSWORD"),
         )
     
     def _get_auth_headers(self) -> Dict[str, str]:
         """Get authentication headers for API requests"""
         headers = {"Content-Type": "application/json"}
         
-        if self.config.api_token:
-            headers["Authorization"] = f"Token {self.config.api_token}"
+        # Add CSRF token if we have it
+        if self.csrf_token:
+            headers["X-CSRFToken"] = self.csrf_token
+            headers["Referer"] = self.config.base_url
         
         return headers
     
-    def _get_auth(self) -> Optional[tuple]:
-        """Get basic auth credentials if configured"""
-        if self.config.username and self.config.password:
-            return (self.config.username, self.config.password)
+    async def _authenticate(self) -> bool:
+        """Perform session-based authentication"""
+        if self.authenticated:
+            return True
+            
+        try:
+            # Get login page to extract CSRF token
+            login_url = urljoin(self.config.base_url.rstrip("/") + "/", "login/")
+            response = await self.client.get(login_url)
+            response.raise_for_status()
+            
+            # Extract CSRF token from login form or cookies
+            csrf_token = None
+            if 'csrftoken' in self.client.cookies:
+                csrf_token = self.client.cookies['csrftoken']
+            else:
+                # Try to extract from HTML
+                csrf_match = re.search(r'name=["\']csrfmiddlewaretoken["\'] value=["\']([^"\']+)["\']', response.text)
+                if csrf_match:
+                    csrf_token = csrf_match.group(1)
+            
+            if not csrf_token:
+                raise Exception("Could not extract CSRF token")
+                
+            self.csrf_token = csrf_token
+            
+            # Perform login
+            login_data = {
+                'username': self.config.username,
+                'password': self.config.password,
+                'csrfmiddlewaretoken': csrf_token,
+            }
+            
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrf_token,
+                'Referer': login_url,
+            }
+            
+            response = await self.client.post(
+                login_url,
+                data=login_data,
+                headers=headers,
+                follow_redirects=False
+            )
+            
+            # Check for successful login (redirect or 200 with session)
+            if response.status_code in [200, 302] and 'sessionid' in self.client.cookies:
+                self.authenticated = True
+                
+                # Get session info if user is an agent
+                try:
+                    session_info = await self._get_session_info()
+                    if session_info:
+                        self.session_info = session_info
+                except Exception:
+                    # Not an agent or session info not available
+                    pass
+                    
+                return True
+            else:
+                raise Exception(f"Login failed with status {response.status_code}")
+                
+        except Exception as e:
+            raise Exception(f"Authentication failed: {str(e)}")
+    
+    async def _get_session_info(self) -> Optional[Dict]:
+        """Get agent session information"""
+        try:
+            response = await self.client.get(
+                urljoin(self.config.base_url.rstrip("/") + "/", "api/agent-session-info/"),
+                headers=self._get_auth_headers()
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception:
+            pass
         return None
     
     async def _make_request(
@@ -91,6 +175,10 @@ class HelpdeskMCPServer:
         json_data: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """Make an authenticated API request"""
+        # Ensure we're authenticated
+        if not await self._authenticate():
+            raise Exception("Authentication required")
+            
         url = urljoin(self.config.base_url.rstrip("/") + "/", f"api/{endpoint.lstrip('/')}")
         
         try:
@@ -98,7 +186,6 @@ class HelpdeskMCPServer:
                 method=method,
                 url=url,
                 headers=self._get_auth_headers(),
-                auth=self._get_auth(),
                 params=params,
                 json=json_data,
                 timeout=30.0,
@@ -290,6 +377,36 @@ class HelpdeskMCPServer:
                             }
                         }
                     }
+                ),
+                Tool(
+                    name="get_agent_session_info",
+                    description="Get current agent session information (branch name, intent, etc.)",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="set_agent_intent",
+                    description="Set the intent for the current agent session",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "intent": {
+                                "type": "string",
+                                "description": "The intent to set for the session (max 512 characters)"
+                            }
+                        },
+                        "required": ["intent"]
+                    }
+                ),
+                Tool(
+                    name="finish_agent_session",
+                    description="Finish the current agent session and perform cleanup",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
                 )
             ])
         
@@ -312,6 +429,12 @@ class HelpdeskMCPServer:
                     return await self._get_queues(arguments)
                 elif name == "get_users":
                     return await self._get_users(arguments)
+                elif name == "get_agent_session_info":
+                    return await self._get_agent_session_info(arguments)
+                elif name == "set_agent_intent":
+                    return await self._set_agent_intent(arguments)
+                elif name == "finish_agent_session":
+                    return await self._finish_agent_session(arguments)
                 else:
                     return CallToolResult([
                         TextContent(type="text", text=f"Unknown tool: {name}")
@@ -500,6 +623,88 @@ class HelpdeskMCPServer:
             TextContent(type="text", text=result_text)
         ])
     
+    async def _get_agent_session_info(self, arguments: Dict[str, Any]) -> CallToolResult:
+        """Get current agent session information"""
+        try:
+            data = await self._make_request("GET", "agent-session-info/")
+            
+            result_text = "Agent Session Information:\n\n"
+            result_text += f"User ID: {data.get('user_id', 'N/A')}\n"
+            result_text += f"Username: {data.get('username', 'N/A')}\n"
+            result_text += f"Is Agent: {data.get('is_agent', 'N/A')}\n"
+            result_text += f"Branch Name: {data.get('branch_name', 'Not set')}\n"
+            intent = data.get('intent')
+            result_text += f"Intent: {'Not set' if intent is None else intent}\n"
+            result_text += f"Session Key: {data.get('session_key', 'N/A')}\n"
+            result_text += f"Authentication: {data.get('authentication_method', 'N/A')}\n"
+            
+            if data.get('branch_name'):
+                result_text += f"\nBranch Usage Examples:\n"
+                result_text += f"  Database context: Working in branch '{data['branch_name']}'\n"
+                result_text += f"  Isolation: Changes are isolated to this branch\n"
+                
+            return CallToolResult([
+                TextContent(type="text", text=result_text)
+            ])
+            
+        except Exception as e:
+            return CallToolResult([
+                TextContent(type="text", text=f"Error getting session info: {str(e)}")
+            ])
+    
+    async def _set_agent_intent(self, arguments: Dict[str, Any]) -> CallToolResult:
+        """Set the intent for the current agent session"""
+        intent = arguments["intent"]
+        
+        if len(intent) > 512:
+            return CallToolResult([
+                TextContent(type="text", text="Error: Intent must be 512 characters or less")
+            ])
+        
+        try:
+            data = await self._make_request("POST", "set-agent-intent/", json_data={"intent": intent})
+            
+            result_text = "Agent Intent Set Successfully\n\n"
+            result_text += f"Intent: {data.get('intent', 'Unknown')}\n"
+            result_text += f"User: {data.get('username', 'Unknown')}\n"
+            result_text += f"Branch: {data.get('branch_name', 'Unknown')}\n"
+            result_text += f"Session: {data.get('session_key', 'Unknown')}\n"
+            
+            return CallToolResult([
+                TextContent(type="text", text=result_text)
+            ])
+            
+        except Exception as e:
+            return CallToolResult([
+                TextContent(type="text", text=f"Error setting intent: {str(e)}")
+            ])
+    
+    async def _finish_agent_session(self, arguments: Dict[str, Any]) -> CallToolResult:
+        """Finish the current agent session and perform cleanup"""
+        try:
+            data = await self._make_request("POST", "finish-agent-session/")
+            
+            result_text = "Agent Session Finished Successfully\n\n"
+            result_text += f"User: {data.get('username', 'Unknown')}\n"
+            result_text += f"Branch: {data.get('branch_name', 'Unknown')}\n"
+            result_text += f"Intent: {data.get('intent', 'Not set')}\n"
+            result_text += f"Session: {data.get('session_key', 'Unknown')}\n"
+            result_text += f"\nSession cleanup completed and user logged out.\n"
+            result_text += f"You will need to re-authenticate for further API calls.\n"
+            
+            # Mark as no longer authenticated since the session was finished
+            self.authenticated = False
+            self.session_info = None
+            
+            return CallToolResult([
+                TextContent(type="text", text=result_text)
+            ])
+            
+        except Exception as e:
+            return CallToolResult([
+                TextContent(type="text", text=f"Error finishing session: {str(e)}")
+            ])
+    
     async def run(self):
         """Run the MCP server"""
         async with stdio_server() as (read_stream, write_stream):
@@ -508,7 +713,7 @@ class HelpdeskMCPServer:
                 write_stream, 
                 InitializationOptions(
                     server_name="django-helpdesk",
-                    server_version="0.1.0",
+                    server_version="0.2.0",
                     capabilities=self.server.get_capabilities(
                         notification_options=None,
                         experimental_capabilities=None,
