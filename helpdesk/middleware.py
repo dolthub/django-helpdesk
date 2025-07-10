@@ -390,8 +390,9 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
             return None
         
         # For session-based authentication, check if we need to initialize the session
-        if not request.session.session_key:
-            # Force session creation
+        # Note: signed_cookies sessions don't have session_key, so we skip the cycle_key call
+        if not request.session.session_key and not self._is_signed_cookie_session():
+            # Force session creation (only for database-backed sessions)
             request.session.cycle_key()
             
         # Check if branch_name is already set in session
@@ -421,7 +422,7 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
                     'user_id': request.user.id,
                     'username': request.user.username,
                     'branch_name': branch_name,
-                    'session_key': request.session.session_key,
+                    'session_key': self._get_session_identifier(request),
                     'is_api_request': self._is_api_request(request),
                 }
             )
@@ -447,6 +448,25 @@ class AgentBranchNameMiddleware(MiddlewareMixin):
         Check if this is an API request.
         """
         return request.path.startswith('/api/')
+    
+    def _is_signed_cookie_session(self):
+        """
+        Check if we're using signed cookie sessions.
+        """
+        from django.conf import settings
+        return settings.SESSION_ENGINE == 'django.contrib.sessions.backends.signed_cookies'
+    
+    def _get_session_identifier(self, request):
+        """
+        Get a session identifier that works with both database and signed cookie sessions.
+        """
+        if self._is_signed_cookie_session():
+            # For signed cookies, use user ID + branch name as identifier
+            branch_name = request.session.get('branch_name')
+            return f"cookie_{request.user.id}_{branch_name}" if branch_name else f"cookie_{request.user.id}"
+        else:
+            # For database sessions, use the actual session key
+            return request.session.session_key
 
     def _create_dolt_branch(self, branch_name):
         """
@@ -564,7 +584,7 @@ class AgentSessionTimeoutMiddleware(MiddlewareMixin):
         if not hasattr(request, 'session'):
             return None
             
-        current_session_key = request.session.session_key
+        current_session_key = self._get_session_identifier(request)
         user_id = request.user.id
         
         # Check if we have a record of this user's previous session
@@ -600,6 +620,25 @@ class AgentSessionTimeoutMiddleware(MiddlewareMixin):
             return user.usersettings_helpdesk.is_agent
         except AttributeError:
             return False
+    
+    def _is_signed_cookie_session(self):
+        """
+        Check if we're using signed cookie sessions.
+        """
+        from django.conf import settings
+        return settings.SESSION_ENGINE == 'django.contrib.sessions.backends.signed_cookies'
+    
+    def _get_session_identifier(self, request):
+        """
+        Get a session identifier that works with both database and signed cookie sessions.
+        """
+        if self._is_signed_cookie_session():
+            # For signed cookies, use user ID + branch name as identifier
+            branch_name = request.session.get('branch_name')
+            return f"cookie_{request.user.id}_{branch_name}" if branch_name else f"cookie_{request.user.id}"
+        else:
+            # For database sessions, use the actual session key
+            return request.session.session_key
     
     def _get_previous_session_data(self, user_id):
         """

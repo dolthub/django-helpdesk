@@ -17,6 +17,20 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
 
+def _get_session_identifier(request):
+    """
+    Get a session identifier that works with both database and signed cookie sessions.
+    """
+    from django.conf import settings
+    if settings.SESSION_ENGINE == 'django.contrib.sessions.backends.signed_cookies':
+        # For signed cookies, use user ID + branch name as identifier
+        branch_name = request.session.get('branch_name')
+        return f"cookie_{request.user.id}_{branch_name}" if branch_name else f"cookie_{request.user.id}"
+    else:
+        # For database sessions, use the actual session key
+        return request.session.session_key
+
+
 class IsStaffUser(IsAuthenticated):
     """
     Allows access only to staff users (is_staff=True).
@@ -168,7 +182,7 @@ def agent_session_info(request):
     
     if hasattr(request, 'session'):
         session_available = True
-        session_key = request.session.session_key
+        session_key = _get_session_identifier(request)
         
         # The middleware should have already created the branch name
         # But if not, we can trigger it manually
@@ -258,7 +272,7 @@ def set_agent_intent(request):
         'user_id': request.user.id,
         'username': request.user.username,
         'branch_name': request.session.get('branch_name'),
-        'session_key': request.session.session_key
+        'session_key': _get_session_identifier(request)
     })
 
 
@@ -295,7 +309,7 @@ def finish_agent_session(request):
     # Get session data before clearing
     branch_name = request.session.get('branch_name')
     intent = request.session.get('intent')
-    session_key = request.session.session_key
+    session_key = _get_session_identifier(request)
     
     # Call the session finished handler
     try:
@@ -360,6 +374,11 @@ def on_session_finished(user, session_key, branch_name=None, intent=None):
         logger.info(
             f"Agent session finished for user '{user.username}'",
             extra={
+                'method': 'SESSION_FINISH',
+                'path': '/api/session-finish',
+                'user': f"{user.username} (ID: {user.id})",
+                'client_ip': 'session_timeout',
+                'headers': {},
                 'user_id': user.id,
                 'username': user.username,
                 'session_key': session_key,
@@ -375,6 +394,11 @@ def on_session_finished(user, session_key, branch_name=None, intent=None):
         logger.info(
             f"Session cleanup completed for agent '{user.username}' with branch '{branch_name}'",
             extra={
+                'method': 'SESSION_CLEANUP',
+                'path': '/api/session-cleanup',
+                'user': f"{user.username} (ID: {user.id})",
+                'client_ip': 'session_timeout',
+                'headers': {},
                 'user_id': user.id,
                 'username': user.username,
                 'session_key': session_key,
@@ -388,6 +412,11 @@ def on_session_finished(user, session_key, branch_name=None, intent=None):
         logger.error(
             f"Error during session cleanup for user '{user.username}': {e}",
             extra={
+                'method': 'SESSION_CLEANUP_ERROR',
+                'path': '/api/session-cleanup',
+                'user': f"{user.username} (ID: {user.id})",
+                'client_ip': 'session_timeout',
+                'headers': {},
                 'user_id': user.id,
                 'username': user.username,
                 'session_key': session_key,
@@ -412,6 +441,11 @@ def _call_finish_session_stored_proc(branch_name, intent):
             logger.info(
                 "Successfully finished session  for branch " + branch_name,
                 extra={
+                    'method': 'STORED_PROC',
+                    'path': '/dolt/finish-session',
+                    'user': 'System',
+                    'client_ip': 'localhost',
+                    'headers': {},
                     'branch_name': branch_name,
                     'intent': intent,
                     'operation': 'Call FinishSession stored procedure'
@@ -422,6 +456,11 @@ def _call_finish_session_stored_proc(branch_name, intent):
         logger.error(
             f"Failed to create Dolt branch '{branch_name}': {e}",
             extra={
+                'method': 'STORED_PROC_ERROR',
+                'path': '/dolt/finish-session',
+                'user': 'System',
+                'client_ip': 'localhost',
+                'headers': {},
                 'branch_name': branch_name,
                 'error': str(e),
                 'operation': 'dolt_branch_creation_failed'

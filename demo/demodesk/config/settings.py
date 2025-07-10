@@ -227,8 +227,7 @@ DATABASES = {
     }
 }
 
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
-
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
 # Sites
 # - this allows hosting of more than one site from a single server,
