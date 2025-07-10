@@ -31,6 +31,7 @@ from django.utils.html import escape
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.generic.edit import FormView, UpdateView
+from django.views.generic import TemplateView
 from helpdesk import settings as helpdesk_settings
 from helpdesk.decorators import (
     helpdesk_staff_member_required,
@@ -2148,3 +2149,12 @@ def delete_checklist_template(request, checklist_template_id):
             "checklist_template": checklist_template,
         },
     )
+
+
+@helpdesk_staff_member_required
+def pullrequest_index(request):
+    """
+    Placeholder view for Pull Requests functionality.
+    This will eventually display a list of pull requests.
+    """
+    return render(request, "helpdesk/pullrequest_index.html")
