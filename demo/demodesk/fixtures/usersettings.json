@@ -1,0 +1,44 @@
+[
+{
+    "model": "helpdesk.usersettings",
+    "pk": 1,
+    "fields": {
+        "user": 1,
+        "settings_pickled": null,
+        "login_view_ticketlist": true,
+        "email_on_ticket_change": true,
+        "email_on_ticket_assign": true,
+        "tickets_per_page": 25,
+        "use_email_as_submitter": true,
+        "is_agent": false
+    }
+},
+{
+    "model": "helpdesk.usersettings",
+    "pk": 2,
+    "fields": {
+        "user": 2,
+        "settings_pickled": null,
+        "login_view_ticketlist": true,
+        "email_on_ticket_change": true,
+        "email_on_ticket_assign": true,
+        "tickets_per_page": 25,
+        "use_email_as_submitter": true,
+        "is_agent": true
+    }
+},
+{
+    "model": "helpdesk.usersettings",
+    "pk": 3,
+    "fields": {
+        "user": 3,
+        "settings_pickled": null,
+        "login_view_ticketlist": true,
+        "email_on_ticket_change": true,
+        "email_on_ticket_assign": true,
+        "tickets_per_page": 25,
+        "use_email_as_submitter": true,
+        "is_agent": true
+    }
+}
+]

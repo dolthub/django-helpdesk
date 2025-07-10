@@ -18,7 +18,7 @@ BEGIN
   SET @create_pr = 0;
 
   IF @changes > 0 THEN
-    CALL dolt_commit('-Am', @intent);
+    CALL dolt_commit('-Am', intent);
     SET @create_pr = 1;
   ELSE
     SET @branch_hash = (SELECT hash FROM dolt_branches WHERE name = branch_name);
@@ -34,7 +34,7 @@ BEGIN
       
   IF @create_pr = 1 THEN
       CALL dolt_checkout('main');
-      INSERT INTO helpdesk_pullrequests (branch, intent, creation_date, status) VALUES (@branch_name, @intent, now(), 1);
+      INSERT INTO helpdesk_pullrequests (branch, intent, creation_date, status) VALUES (branch_name, intent, now(), 1);
   END IF;
 END
 '''
