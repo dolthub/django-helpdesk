@@ -105,8 +105,6 @@ demo:
 	# Install fixtures
 	demodesk loaddata emailtemplate.json
 	demodesk loaddata demo.json
-	demodesk loaddata users.json
-	demodesk loaddata usersettings.json
 	python demo/manage.py dolt_commit -m 'installation complete with fixtures loaded.'
 
 
