@@ -151,6 +151,7 @@ urlpatterns = [
         name="timeline_ticket_list",
     ),
     path("pullrequests/", staff.pullrequest_index, name="pullrequest_index"),
+    path("pullrequests/<str:branch>/", staff.pullrequest_detail, name="pullrequest_detail"),
 ]
 
 if helpdesk_settings.HELPDESK_ENABLE_DEPENDENCIES_ON_TICKET:

@@ -1,0 +1,216 @@
+{% extends "helpdesk/base.html" %}
+{% load i18n %}
+
+{% block helpdesk_title %}{% trans "Pull Request" %} - {{ pull_request.branch }}{% endblock %}
+
+{% block helpdesk_body %}
+<div class="row">
+    <div class="col-sm-12">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <svg style="width: 24px; height: 24px; margin-right: 0.5rem;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor"><path d="M249.4 25.4c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L269.3 96 416 96c53 0 96 43 96 96l0 32c0 17.7-14.3 32-32 32s-32-14.3-32-32l0-32c0-17.7-14.3-32-32-32l-146.7 0 25.4 25.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-80-80c-12.5-12.5-12.5-32.8 0-45.3l80-80zm13.3 256l80 80c12.5 12.5 12.5 32.8 0 45.3l-80 80c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 416 96 416c-17.7 0-32 14.3-32 32l0 32c0 17.7-14.3 32-32 32s-32-14.3-32-32l0-32c0-53 43-96 96-96l146.7 0-25.4-25.4c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0zM384 384a64 64 0 1 1 128 0 64 64 0 1 1 -128 0zM64 192A64 64 0 1 1 64 64a64 64 0 1 1 0 128z"/></svg>
+                {% trans "Pull Request" %}: <code class="text-primary">{{ pull_request.branch }}</code>
+            </h2>
+            <div>
+                <a href="{% url 'helpdesk:pullrequest_index' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> {% trans "Back to List" %}
+                </a>
+            </div>
+        </div>
+
+        <!-- Status Badge -->
+        <div class="mb-4">
+            <span class="badge {{ pull_request.get_status_display_class }} badge-lg" style="font-size: 1em; padding: 0.5rem 1rem;">
+                {{ pull_request.get_status_display }}
+            </span>
+        </div>
+
+        <!-- Pull Request Details -->
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Intent Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-bullseye"></i> {% trans "Intent" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">{{ pull_request.intent }}</p>
+                    </div>
+                </div>
+
+                <!-- Actions Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-cogs"></i> {% trans "Actions" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% if pull_request.status == 1 %}
+                                <!-- Only show actions for Created PRs -->
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                            <h6 class="card-title">{% trans "Merge Pull Request" %}</h6>
+                                            <p class="card-text text-muted small">{% trans "Merge this branch into main" %}</p>
+                                            <button class="btn btn-success btn-sm" onclick="alert('Merge functionality coming soon!')">
+                                                <i class="fas fa-code-branch"></i> {% trans "Merge" %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-danger">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                                            <h6 class="card-title">{% trans "Discard Pull Request" %}</h6>
+                                            <p class="card-text text-muted small">{% trans "Close without merging" %}</p>
+                                            <button class="btn btn-danger btn-sm" onclick="alert('Discard functionality coming soon!')">
+                                                <i class="fas fa-trash"></i> {% trans "Discard" %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="col-12">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i>
+                                        {% if pull_request.status == 2 %}
+                                            {% trans "This pull request has been merged and no further actions are available." %}
+                                        {% else %}
+                                            {% trans "This pull request has been discarded and no further actions are available." %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-md-4">
+                <!-- Details Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-info-circle"></i> {% trans "Details" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-5">{% trans "Branch:" %}</dt>
+                            <dd class="col-sm-7">
+                                <code class="text-primary">{{ pull_request.branch }}</code>
+                            </dd>
+
+                            <dt class="col-sm-5">{% trans "Status:" %}</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge {{ pull_request.get_status_display_class }}">
+                                    {{ pull_request.get_status_display }}
+                                </span>
+                            </dd>
+
+                            <dt class="col-sm-5">{% trans "Created:" %}</dt>
+                            <dd class="col-sm-7">
+                                <span title="{{ pull_request.creation_date }}">
+                                    {{ pull_request.creation_date|date:"M d, Y" }}<br>
+                                    <small class="text-muted">{{ pull_request.creation_date|date:"H:i" }}</small>
+                                </span>
+                            </dd>
+
+                            {% if pull_request.resolution_date %}
+                                <dt class="col-sm-5">
+                                    {% if pull_request.status == 2 %}
+                                        {% trans "Merged:" %}
+                                    {% else %}
+                                        {% trans "Discarded:" %}
+                                    {% endif %}
+                                </dt>
+                                <dd class="col-sm-7">
+                                    <span title="{{ pull_request.resolution_date }}">
+                                        {{ pull_request.resolution_date|date:"M d, Y" }}<br>
+                                        <small class="text-muted">{{ pull_request.resolution_date|date:"H:i" }}</small>
+                                    </span>
+                                </dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Timeline Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-history"></i> {% trans "Timeline" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            <!-- Creation Event -->
+                            <div class="d-flex mb-3">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-plus-circle text-primary"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6 class="mb-0">{% trans "Pull Request Created" %}</h6>
+                                    <small class="text-muted">{{ pull_request.creation_date|date:"M d, Y H:i" }}</small>
+                                </div>
+                            </div>
+
+                            <!-- Resolution Event -->
+                            {% if pull_request.resolution_date %}
+                                <div class="d-flex">
+                                    <div class="flex-shrink-0">
+                                        {% if pull_request.status == 2 %}
+                                            <i class="fas fa-check-circle text-success"></i>
+                                        {% else %}
+                                            <i class="fas fa-times-circle text-danger"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <h6 class="mb-0">
+                                            {% if pull_request.status == 2 %}
+                                                {% trans "Pull Request Merged" %}
+                                            {% else %}
+                                                {% trans "Pull Request Discarded" %}
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">{{ pull_request.resolution_date|date:"M d, Y H:i" }}</small>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline .d-flex:not(:last-child):before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 2rem;
+    height: 1.5rem;
+    width: 1px;
+    background-color: #dee2e6;
+}
+
+.timeline {
+    position: relative;
+}
+
+.badge-lg {
+    font-size: 1em !important;
+    padding: 0.5rem 1rem !important;
+}
+</style>
+{% endblock %}

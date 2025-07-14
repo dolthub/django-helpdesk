@@ -2154,7 +2154,54 @@ def delete_checklist_template(request, checklist_template_id):
 @helpdesk_staff_member_required
 def pullrequest_index(request):
     """
-    Placeholder view for Pull Requests functionality.
-    This will eventually display a list of pull requests.
+    Display a list of pull requests with filtering and sorting capabilities.
     """
-    return render(request, "helpdesk/pullrequest_index.html")
+    from helpdesk.models import PullRequests
+    
+    # Get filter parameters
+    status_filter = request.GET.get('status', '')
+    sort_by = request.GET.get('sort', 'creation_date')
+    order = request.GET.get('order', 'desc')
+    
+    # Start with all pull requests
+    pull_requests = PullRequests.objects.all()
+    
+    # Apply status filter
+    if status_filter and status_filter.isdigit():
+        pull_requests = pull_requests.filter(status=int(status_filter))
+    
+    # Apply sorting
+    valid_sort_fields = ['branch', 'intent', 'creation_date', 'resolution_date', 'status']
+    if sort_by in valid_sort_fields:
+        if order == 'desc':
+            sort_by = f'-{sort_by}'
+        pull_requests = pull_requests.order_by(sort_by)
+    
+    # Get status choices for filter dropdown
+    status_choices = PullRequests.STATUS_CHOICES
+    
+    context = {
+        'pull_requests': pull_requests,
+        'status_choices': status_choices,
+        'current_status_filter': status_filter,
+        'current_sort': request.GET.get('sort', 'creation_date'),
+        'current_order': order,
+    }
+    
+    return render(request, "helpdesk/pullrequest_index.html", context)
+
+
+@helpdesk_staff_member_required
+def pullrequest_detail(request, branch):
+    """
+    Display detailed information for a specific pull request.
+    """
+    from helpdesk.models import PullRequests
+    
+    pull_request = get_object_or_404(PullRequests, branch=branch)
+    
+    context = {
+        'pull_request': pull_request,
+    }
+    
+    return render(request, "helpdesk/pullrequest_detail.html", context)

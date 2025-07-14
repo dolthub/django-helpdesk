@@ -2282,3 +2282,64 @@ class ChecklistTask(models.Model):
 
     def __str__(self):
         return self.description
+
+
+class PullRequests(models.Model):
+    """
+    Model for tracking pull requests created by agents.
+    """
+    branch = models.CharField(
+        verbose_name=_("PR Branch"),
+        primary_key=True,
+        help_text=_("Agent created branch which needs to be merged, or discarded."),
+        max_length=64,
+    )
+    intent = models.CharField(
+        verbose_name=_("PR Intent"),
+        max_length=512,
+        null=False,
+        blank=False,
+        help_text=_("Description of what the agent was attempting to do in this PR.")
+    )
+    creation_date = models.DateTimeField(
+        verbose_name=_("PR Creation date"),
+        blank=False,
+        null=False,
+        help_text=_("Date this pr was created.")
+    )
+    resolution_date = models.DateTimeField(
+        verbose_name=_("PR Resolution Date"),
+        blank=True,
+        null=True,
+        help_text=_("Date this pr was merged or discarded.")
+    )
+    
+    STATUS_CHOICES = [
+        (1, _("1. Open")),
+        (2, _("2. Merged")),
+        (3, _("3. Discarded")),
+    ]
+    
+    status = models.IntegerField(
+        verbose_name=_("PR Status"),
+        help_text=_("1. Open, 2. Merged, 3. Discarded"),
+        default=1,
+        choices=STATUS_CHOICES
+    )
+
+    class Meta:
+        verbose_name = _("Pull Request")
+        verbose_name_plural = _("Pull Requests")
+        ordering = ["-creation_date"]
+
+    def __str__(self):
+        return f"PR {self.branch}: {self.intent[:50]}..."
+    
+    def get_status_display_class(self):
+        """Return CSS class for status display"""
+        status_classes = {
+            1: "badge-primary",    # Open
+            2: "badge-success",    # Merged  
+            3: "badge-secondary",  # Discarded
+        }
+        return status_classes.get(self.status, "badge-secondary")

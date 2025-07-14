@@ -55,11 +55,11 @@ class Migration(migrations.Migration):
                     "status",
                     models.IntegerField(
                         verbose_name="PR Status",
-                        help_text="1. Created, 2. Merged, 3. Discarded",
+                        help_text="1. Open, 2. Merged, 3. Discarded",
                         blank=1,
                         default=1,
                         choices=[
-                            (1, "1. Created"),
+                            (1, "1. Open"),
                             (2, "2. Merged"),
                             (3, "3. Discarded"),
                         ]
