@@ -152,6 +152,8 @@ urlpatterns = [
     ),
     path("pullrequests/", staff.pullrequest_index, name="pullrequest_index"),
     path("pullrequests/<str:branch>/", staff.pullrequest_detail, name="pullrequest_detail"),
+    path("pullrequests/<str:branch>/discard/", staff.pullrequest_discard, name="pullrequest_discard"),
+    path("pullrequests/<str:branch>/reopen/", staff.pullrequest_reopen, name="pullrequest_reopen"),
 ]
 
 if helpdesk_settings.HELPDESK_ENABLE_DEPENDENCIES_ON_TICKET:

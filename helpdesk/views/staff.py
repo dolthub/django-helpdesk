@@ -2197,11 +2197,120 @@ def pullrequest_detail(request, branch):
     Display detailed information for a specific pull request.
     """
     from helpdesk.models import PullRequests
+    from django.db import connection
+    import logging
+
+    pull_request = get_object_or_404(PullRequests, branch=branch)
+    
+    # Only get diff summary for open pull requests (status = 1)
+    diff_summary = None
+    table_diffs = None
+    if pull_request.status == 1:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM DOLT_DIFF_SUMMARY(%s)", [f'main...{branch}'])
+                columns = [col[0] for col in cursor.description]
+                rows = cursor.fetchall()
+                all_results = [dict(zip(columns, row)) for row in rows]
+                
+                # Filter for helpdesk_ tables only and remove the prefix
+                diff_summary = []
+                for row in all_results:
+                    if row.get('to_table_name', '').startswith('helpdesk_'):
+                        # Create a copy and modify the table name
+                        filtered_row = row.copy()
+                        filtered_row['display_table_name'] = row['to_table_name'][9:]  # Remove 'helpdesk_' prefix
+                        diff_summary.append(filtered_row)
+
+            table_diffs = {}
+            for table_row in diff_summary:
+                with connection.cursor() as cursor:
+                    table_name = table_row.get('to_table_name')
+                    cursor.execute("SELECT * FROM dolt_diff(%s, %s)", [f'main...{branch}', table_name])
+                    columns = [col[0] for col in cursor.description]
+                    rows = cursor.fetchall()
+                    all_results = [dict(zip(columns, row)) for row in rows]
+
+                    table_diffs[table_name] = []
+                    for row in all_results:
+                        table_diffs[table_name] = row.copy()
+
+        except Exception as e:
+            # Log error but don't fail the entire page
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error fetching diff summary for branch {branch}: {e}")
+            diff_summary = None
+
+    context = {
+        'pull_request': pull_request,
+        'diff_summary': diff_summary,
+        'table_diffs': table_diffs,
+    }
+
+    logger = logging.getLogger(__name__)
+    logger.info(str(context))
+
+    return render(request, "helpdesk/pullrequest_detail.html", context)
+
+
+@helpdesk_staff_member_required
+def pullrequest_discard(request, branch):
+    """
+    Discard a pull request by setting its status to 3 and resolution date.
+    """
+    from helpdesk.models import PullRequests
+    from django.utils import timezone
+    from django.contrib import messages
     
     pull_request = get_object_or_404(PullRequests, branch=branch)
     
+    # Only allow discarding if status is 1 (Open)
+    if pull_request.status != 1:
+        messages.error(request, _("This pull request cannot be discarded as it is not in Open status."))
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    if request.method == "POST":
+        # Update status to 3 (Discarded) and set resolution date
+        pull_request.status = 3
+        pull_request.resolution_date = timezone.now()
+        pull_request.save()
+        
+        messages.success(request, _("Pull request has been discarded successfully."))
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    # If GET request, show confirmation page
     context = {
         'pull_request': pull_request,
     }
+    return render(request, "helpdesk/pullrequest_discard_confirm.html", context)
+
+
+@helpdesk_staff_member_required
+def pullrequest_reopen(request, branch):
+    """
+    Reopen a pull request by setting its status to 1 and clearing resolution date.
+    """
+    from helpdesk.models import PullRequests
+    from django.contrib import messages
     
-    return render(request, "helpdesk/pullrequest_detail.html", context)
+    pull_request = get_object_or_404(PullRequests, branch=branch)
+    
+    # Only allow reopening if status is 3 (Discarded)
+    if pull_request.status != 3:
+        messages.error(request, _("This pull request cannot be reopened as it is not in Discarded status."))
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    if request.method == "POST":
+        # Update status to 1 (Open) and clear resolution date
+        pull_request.status = 1
+        pull_request.resolution_date = None
+        pull_request.save()
+        
+        messages.success(request, _("Pull request has been reopened successfully."))
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    # If GET request, show confirmation page
+    context = {
+        'pull_request': pull_request,
+    }
+    return render(request, "helpdesk/pullrequest_reopen_confirm.html", context)
