@@ -2233,7 +2233,7 @@ def pullrequest_detail(request, branch):
 
                     table_diffs[table_name] = []
                     for row in all_results:
-                        table_diffs[table_name] = row.copy()
+                        table_diffs[table_name].append(row.copy())
 
         except Exception as e:
             # Log error but don't fail the entire page
