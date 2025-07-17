@@ -2233,7 +2233,20 @@ def pullrequest_detail(request, branch):
 
                     table_diffs[table_name] = []
                     for row in all_results:
-                        table_diffs[table_name].append(row.copy())
+                        processed_row = row.copy()
+                        
+                        # For modified rows, create individual from_ and to_ keys with change flags
+                        if row.get('diff_type') == 'modified':
+                            for key, value in row.items():
+                                if key.startswith('from_'):
+                                    field_name = key[5:]  # Remove 'from_' prefix
+                                    to_key = f'to_{field_name}'
+                                    if to_key in row:
+                                        # Mark whether this specific field changed
+                                        processed_row[f'{key}_changed'] = row[to_key] != value
+                                        processed_row[f'{to_key}_changed'] = row[to_key] != value
+                        
+                        table_diffs[table_name].append(processed_row)
 
         except Exception as e:
             # Log error but don't fail the entire page

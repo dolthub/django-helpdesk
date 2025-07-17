@@ -20,3 +20,9 @@ def helpdesk_staff(user):
         return is_helpdesk_staff(user)
     except Exception:
         logger.exception("'helpdesk_staff' template tag (django-helpdesk) crashed")
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary by key."""
+    return dictionary.get(key)

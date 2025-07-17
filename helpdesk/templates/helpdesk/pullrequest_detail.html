@@ -1,5 +1,6 @@
 {% extends "helpdesk/base.html" %}
 {% load i18n %}
+{% load helpdesk_staff %}
 
 {% block helpdesk_title %}{% trans "Pull Request" %} - {{ pull_request.branch }}{% endblock %}
 
@@ -252,56 +253,68 @@
                                                                 {% endfor %}
                                                             </tr>
                                                         {% elif change.diff_type == "modified" %}
-                                                            <!-- Modified row - show both from_ (red) and to_ (green) values -->
-                                                            <tr class="table-danger">
+                                                            <!-- Modified row - show both from_ (red cells for changes) and to_ (green cells for changes) values -->
+                                                            <tr>
                                                                 <td>
                                                                     <span class="badge badge-warning">
                                                                         <i class="fas fa-edit"></i> {% trans "Before" %}
                                                                     </span>
                                                                 </td>
                                                                 {% for key, value in change.items %}
-                                                                    {% if key not in "diff_type,to_commit,from_commit" and key|slice:":5" == "from_" %}
-                                                                        <td>
-                                                                            {% if value is None %}
-                                                                                <span class="text-muted">—</span>
-                                                                            {% elif value == "" %}
-                                                                                <span class="text-muted">{% trans "Empty" %}</span>
+                                                                    {% if key not in "diff_type,to_commit,from_commit" and key|slice:":5" == "from_" and "_changed" not in key %}
+                                                                        {% with changed_key=key|add:"_changed" %}
+                                                                            {% if change|get_item:changed_key %}
+                                                                                <td class="table-danger">
                                                                             {% else %}
-                                                                                {% if key == "from_id" or key == "from_pk" %}
-                                                                                    <code class="text-info">{{ value }}</code>
-                                                                                {% elif value|length > 50 %}
-                                                                                    <span title="{{ value }}">{{ value|truncatechars:50 }}</span>
-                                                                                {% else %}
-                                                                                    {{ value }}
-                                                                                {% endif %}
+                                                                                <td>
                                                                             {% endif %}
-                                                                        </td>
+                                                                                {% if value is None %}
+                                                                                    <span class="text-muted">—</span>
+                                                                                {% elif value == "" %}
+                                                                                    <span class="text-muted">{% trans "Empty" %}</span>
+                                                                                {% else %}
+                                                                                    {% if key == "from_id" or key == "from_pk" %}
+                                                                                        <code class="text-info">{{ value }}</code>
+                                                                                    {% elif value|length > 50 %}
+                                                                                        <span title="{{ value }}">{{ value|truncatechars:50 }}</span>
+                                                                                    {% else %}
+                                                                                        {{ value }}
+                                                                                    {% endif %}
+                                                                                {% endif %}
+                                                                            </td>
+                                                                        {% endwith %}
                                                                     {% endif %}
                                                                 {% endfor %}
                                                             </tr>
-                                                            <tr class="table-success">
+                                                            <tr>
                                                                 <td>
                                                                     <span class="badge badge-warning">
                                                                         <i class="fas fa-edit"></i> {% trans "After" %}
                                                                     </span>
                                                                 </td>
                                                                 {% for key, value in change.items %}
-                                                                    {% if key not in "diff_type,to_commit,from_commit" and key|slice:":3" == "to_" %}
-                                                                        <td>
-                                                                            {% if value is None %}
-                                                                                <span class="text-muted">—</span>
-                                                                            {% elif value == "" %}
-                                                                                <span class="text-muted">{% trans "Empty" %}</span>
+                                                                    {% if key not in "diff_type,to_commit,from_commit" and key|slice:":3" == "to_" and "_changed" not in key %}
+                                                                        {% with changed_key=key|add:"_changed" %}
+                                                                            {% if change|get_item:changed_key %}
+                                                                                <td class="table-success">
                                                                             {% else %}
-                                                                                {% if key == "to_id" or key == "to_pk" %}
-                                                                                    <code class="text-info">{{ value }}</code>
-                                                                                {% elif value|length > 50 %}
-                                                                                    <span title="{{ value }}">{{ value|truncatechars:50 }}</span>
-                                                                                {% else %}
-                                                                                    {{ value }}
-                                                                                {% endif %}
+                                                                                <td>
                                                                             {% endif %}
-                                                                        </td>
+                                                                                {% if value is None %}
+                                                                                    <span class="text-muted">—</span>
+                                                                                {% elif value == "" %}
+                                                                                    <span class="text-muted">{% trans "Empty" %}</span>
+                                                                                {% else %}
+                                                                                    {% if key == "to_id" or key == "to_pk" %}
+                                                                                        <code class="text-info">{{ value }}</code>
+                                                                                    {% elif value|length > 50 %}
+                                                                                        <span title="{{ value }}">{{ value|truncatechars:50 }}</span>
+                                                                                    {% else %}
+                                                                                        {{ value }}
+                                                                                    {% endif %}
+                                                                                {% endif %}
+                                                                            </td>
+                                                                        {% endwith %}
                                                                     {% endif %}
                                                                 {% endfor %}
                                                             </tr>
