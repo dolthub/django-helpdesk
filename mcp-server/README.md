@@ -49,17 +49,15 @@ The MCP server can be configured using environment variables:
 ### Environment Variables
 
 - `HELPDESK_BASE_URL` - Base URL of your django-helpdesk instance (default: `http://localhost:8080`)
-- `HELPDESK_USERNAME` - Username for session authentication (required)
-- `HELPDESK_PASSWORD` - Password for session authentication (required)
-- `HELPDESK_API_TOKEN` - API token for authentication (deprecated, use session auth)
 
 ### Authentication Method
 
-The server uses **session-based authentication** (required for agent features):
+The server uses **session-based authentication** where credentials are provided by the client at runtime:
+
+- **Client-provided credentials**: Each client must provide their own username and password through the `authenticate` tool
+- **No environment fallback**: Credentials are never read from environment variables for security
 
 ```bash
-export HELPDESK_USERNAME="your-agent-username"
-export HELPDESK_PASSWORD="your-password"
 export HELPDESK_BASE_URL="http://localhost:8080"
 ```
 
@@ -90,16 +88,41 @@ Add this server to your MCP client configuration (e.g., Claude Desktop):
       "command": "python",
       "args": ["/path/to/mcp-server/helpdesk.py"],
       "env": {
-        "HELPDESK_BASE_URL": "https://your-helpdesk.example.com",
-        "HELPDESK_USERNAME": "your-agent-username",
-        "HELPDESK_PASSWORD": "your-password"
+        "HELPDESK_BASE_URL": "https://your-helpdesk.example.com"
       }
     }
   }
 }
 ```
 
+**First Step**: After connecting, use the `authenticate` tool to provide your credentials:
+
+```json
+{
+  "username": "your-agent-username",
+  "password": "your-password"
+}
+```
+
 ## API Tool Reference
+
+### authenticate
+
+Authenticate with the django-helpdesk system using your username and password.
+
+**Parameters:**
+- `username` (string, required) - Your django-helpdesk username
+- `password` (string, required) - Your django-helpdesk password
+
+**Example:**
+```json
+{
+  "username": "agent1",
+  "password": "mypassword"
+}
+```
+
+**Note**: This must be called before using any other tools. Different clients can use different credentials.
 
 ### list_tickets
 
@@ -239,7 +262,6 @@ INSTALLED_APPS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        # Token authentication is deprecated for agent features
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -297,7 +319,7 @@ settings.save()
    - Ensure django-helpdesk is running and accessible
 
 2. **Authentication Failed**
-   - Check your username/password credentials
+   - Check your username/password credentials provided to the `authenticate` tool
    - Verify the user has `is_staff=True` and `is_agent=True` permissions
    - Ensure session-based authentication is configured
 
@@ -332,9 +354,10 @@ python helpdesk.py
 To test the MCP server locally:
 
 1. Start your django-helpdesk instance
-2. Set environment variables
+2. Set `HELPDESK_BASE_URL` environment variable if needed
 3. Run the server: `python helpdesk.py`
 4. Use an MCP-compatible client to interact with the tools
+5. First call the `authenticate` tool with your credentials
 
 ### Contributing
 

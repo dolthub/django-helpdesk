@@ -18,8 +18,21 @@ async def test_connection():
     server = HelpdeskMCPServer()
     
     print(f"Testing connection to: {server.config.base_url}")
-    print(f"Authentication method: {'Token' if server.config.api_token else 'Basic' if server.config.username else 'None'}")
+    
+    # Get credentials from environment for testing
+    username = os.getenv("HELPDESK_USERNAME")
+    password = os.getenv("HELPDESK_PASSWORD")
+    
+    if not username or not password:
+        print("❌ No credentials provided. Please set HELPDESK_USERNAME and HELPDESK_PASSWORD environment variables for testing")
+        return False
+    
+    print(f"Authentication method: Session (username: {username})")
     print()
+    
+    # Set credentials manually for testing
+    server.credentials["username"] = username
+    server.credentials["password"] = password
     
     try:
         # Test basic API connectivity

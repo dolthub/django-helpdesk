@@ -38,16 +38,6 @@ class HelpdeskConfig(BaseModel):
         default="http://localhost:8080",
         description="Base URL of the Django Helpdesk instance"
     )
-    username: str = Field(
-        description="Username for session authentication"
-    )
-    password: str = Field(
-        description="Password for session authentication"
-    )
-    api_token: Optional[str] = Field(
-        default=None,
-        description="API token for authentication (deprecated - use session auth)"
-    )
 
 
 class HelpdeskMCPServer:
@@ -60,21 +50,13 @@ class HelpdeskMCPServer:
         self.authenticated = False
         self.session_info = None
         self.csrf_token = None
+        self.credentials = {"username": None, "password": None}
         self._setup_handlers()
     
     def _load_config(self) -> HelpdeskConfig:
         """Load configuration from environment variables"""
-        username = os.getenv("HELPDESK_USERNAME")
-        password = os.getenv("HELPDESK_PASSWORD")
-        
-        if not username or not password:
-            raise ValueError("HELPDESK_USERNAME and HELPDESK_PASSWORD environment variables are required")
-            
         return HelpdeskConfig(
             base_url=os.getenv("HELPDESK_BASE_URL", "http://localhost:8080"),
-            username=username,
-            password=password,
-            api_token=os.getenv("HELPDESK_API_TOKEN"),
         )
     
     def _get_auth_headers(self) -> Dict[str, str]:
@@ -92,6 +74,13 @@ class HelpdeskMCPServer:
         """Perform session-based authentication"""
         if self.authenticated:
             return True
+            
+        # Check if credentials are available
+        username = self.credentials.get("username")
+        password = self.credentials.get("password")
+        
+        if not username or not password:
+            raise Exception("Username and password must be provided via the authenticate tool")
             
         try:
             # Get login page to extract CSRF token
@@ -116,8 +105,8 @@ class HelpdeskMCPServer:
             
             # Perform login
             login_data = {
-                'username': self.config.username,
-                'password': self.config.password,
+                'username': username,
+                'password': password,
                 'csrfmiddlewaretoken': csrf_token,
             }
             
@@ -202,6 +191,24 @@ class HelpdeskMCPServer:
         async def list_tools() -> ListToolsResult:
             """List available tools"""
             return ListToolsResult([
+                Tool(
+                    name="authenticate",
+                    description="Authenticate with django-helpdesk using username and password",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "username": {
+                                "type": "string",
+                                "description": "Username for authentication"
+                            },
+                            "password": {
+                                "type": "string",
+                                "description": "Password for authentication"
+                            }
+                        },
+                        "required": ["username", "password"]
+                    }
+                ),
                 Tool(
                     name="list_tickets",
                     description="List tickets with optional filtering by status, queue, or other criteria",
@@ -415,7 +422,9 @@ class HelpdeskMCPServer:
             """Handle tool calls"""
             
             try:
-                if name == "list_tickets":
+                if name == "authenticate":
+                    return await self._authenticate_user(arguments)
+                elif name == "list_tickets":
                     return await self._list_tickets(arguments)
                 elif name == "get_ticket":
                     return await self._get_ticket(arguments)
@@ -443,6 +452,44 @@ class HelpdeskMCPServer:
                 return CallToolResult([
                     TextContent(type="text", text=f"Error calling {name}: {str(e)}")
                 ])
+    
+    async def _authenticate_user(self, arguments: Dict[str, Any]) -> CallToolResult:
+        """Authenticate user with provided credentials"""
+        username = arguments["username"]
+        password = arguments["password"]
+        
+        # Store credentials for this session
+        self.credentials["username"] = username
+        self.credentials["password"] = password
+        
+        # Reset authentication state to force re-authentication
+        self.authenticated = False
+        self.csrf_token = None
+        
+        try:
+            # Attempt to authenticate
+            if await self._authenticate():
+                result_text = f"✓ Successfully authenticated as {username}\n"
+                
+                # Try to get session info if available
+                if self.session_info:
+                    result_text += f"  User ID: {self.session_info.get('user_id', 'N/A')}\n"
+                    result_text += f"  Is Agent: {self.session_info.get('is_agent', 'N/A')}\n"
+                    result_text += f"  Branch: {self.session_info.get('branch_name', 'N/A')}\n"
+                
+                result_text += "\nYou can now use other tools to interact with the helpdesk system."
+                
+                return CallToolResult([
+                    TextContent(type="text", text=result_text)
+                ])
+            else:
+                return CallToolResult([
+                    TextContent(type="text", text="❌ Authentication failed")
+                ])
+        except Exception as e:
+            return CallToolResult([
+                TextContent(type="text", text=f"❌ Authentication failed: {str(e)}")
+            ])
     
     async def _list_tickets(self, arguments: Dict[str, Any]) -> CallToolResult:
         """List tickets with optional filtering"""
