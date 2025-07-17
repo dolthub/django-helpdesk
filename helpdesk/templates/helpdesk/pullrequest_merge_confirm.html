@@ -1,0 +1,75 @@
+{% extends "helpdesk/base.html" %}
+{% load i18n %}
+
+{% block helpdesk_title %}{% trans "Merge Pull Request" %} - {{ pull_request.branch }}{% endblock %}
+
+{% block helpdesk_body %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-code-branch"></i> 
+                    {% trans "Confirm Merge" %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-4">
+                    {% blocktrans with branch=pull_request.branch %}
+                        Are you sure you want to merge the pull request for branch <strong>{{ branch }}</strong> into main?
+                    {% endblocktrans %}
+                </p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>{% trans "This action:" %}</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>{% trans "Will merge the branch changes into the main branch" %}</li>
+                        <li>{% trans "Will set the pull request status to 'Merged'" %}</li>
+                        <li>{% trans "Will set the resolution date to now" %}</li>
+                        <li>{% trans "Will make the changes available to all users" %}</li>
+                    </ul>
+                </div>
+                
+                <!-- Pull Request Details -->
+                <div class="mb-4">
+                    <h6>{% trans "Pull Request Details:" %}</h6>
+                    <dl class="row">
+                        <dt class="col-sm-3">{% trans "Branch:" %}</dt>
+                        <dd class="col-sm-9">
+                            <code class="text-primary">{{ pull_request.branch }}</code>
+                        </dd>
+                        
+                        <dt class="col-sm-3">{% trans "Intent:" %}</dt>
+                        <dd class="col-sm-9">{{ pull_request.intent }}</dd>
+                        
+                        <dt class="col-sm-3">{% trans "Created:" %}</dt>
+                        <dd class="col-sm-9">{{ pull_request.creation_date|date:"M d, Y H:i" }}</dd>
+                        
+                        <dt class="col-sm-3">{% trans "Status:" %}</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge {{ pull_request.get_status_display_class }}">
+                                {{ pull_request.get_status_display }}
+                            </span>
+                        </dd>
+                    </dl>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'helpdesk:pullrequest_detail' pull_request.branch %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> {% trans "Cancel" %}
+                    </a>
+                    
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-code-branch"></i> {% trans "Merge Pull Request" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

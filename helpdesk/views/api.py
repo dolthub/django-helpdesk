@@ -439,7 +439,7 @@ def _call_finish_session_stored_proc(branch_name, intent):
             cursor.execute(sql, [branch_name, intent])
 
             logger.info(
-                "Successfully finished session  for branch " + branch_name,
+                "Successfully finished session for branch " + branch_name,
                 extra={
                     'method': 'STORED_PROC',
                     'path': '/dolt/finish-session',

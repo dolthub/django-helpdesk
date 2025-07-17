@@ -2327,3 +2327,76 @@ def pullrequest_reopen(request, branch):
         'pull_request': pull_request,
     }
     return render(request, "helpdesk/pullrequest_reopen_confirm.html", context)
+
+
+@helpdesk_staff_member_required
+def pullrequest_merge(request, branch):
+    """
+    Merge a pull request by setting its status to 2 and resolution date.
+    """
+    from helpdesk.models import PullRequests
+    from django.utils import timezone
+    from django.contrib import messages
+    
+    pull_request = get_object_or_404(PullRequests, branch=branch)
+    
+    # Only allow merging if status is 1 (Open)
+    if pull_request.status != 1:
+        messages.error(request, _("This pull request cannot be merged as it is not in Open status."))
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    if request.method == "POST":
+        # Call the merge confirmation function
+        result = on_merge_confirmation(pull_request)
+        
+        if result.get('success', False):
+            # Update status to 2 (Merged) and set resolution date
+            pull_request.status = 2
+            pull_request.resolution_date = timezone.now()
+            pull_request.save()
+            
+            messages.success(request, _("Pull request has been merged successfully."))
+        else:
+            messages.error(request, result.get('error', _("An error occurred during merge.")))
+        
+        return redirect("helpdesk:pullrequest_detail", branch=branch)
+    
+    # If GET request, show confirmation page
+    context = {
+        'pull_request': pull_request,
+    }
+    return render(request, "helpdesk/pullrequest_merge_confirm.html", context)
+
+
+def on_merge_confirmation(pull_request):
+    """
+    Handle the actual merge operation when user confirms merge.
+    This function can be expanded to include actual git merge operations.
+    
+    Args:
+        pull_request: The PullRequests model instance to merge
+        
+    Returns:
+        dict: {'success': bool, 'error': str (optional)}
+    """
+    from django.db import connection
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        with connection.cursor() as cursor:
+            sql = 'CALL MergePR(%s)'
+            cursor.execute(sql, [pull_request.branch])
+
+        logger.info("Successfully merged branch " + pull_request.branch)
+        
+        return {'success': True}
+        
+    except Exception as e:
+        # Log the error and return failure
+        logger.error(f"Error merging pull request {pull_request.branch}: {e}")
+        
+        return {
+            'success': False,
+            'error': f"Merge failed: {str(e)}"
+        }

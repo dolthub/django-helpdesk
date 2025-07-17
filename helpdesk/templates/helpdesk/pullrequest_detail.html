@@ -29,7 +29,7 @@
 
         <!-- Pull Request Details -->
         <div class="row">
-            <div class="col-md-8">
+            <div class="col-12">
                 <!-- Intent Card -->
                 <div class="card mb-4">
                     <div class="card-header">
@@ -41,9 +41,72 @@
                         <p class="card-text">{{ pull_request.intent }}</p>
                     </div>
                 </div>
+            </div>
+        </div>
 
+        <div class="row">
+            <!-- Details Section - Full Width -->
+            <div class="col-12">
+                <!-- Details Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-info-circle"></i> {% trans "Details" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <dt>{% trans "Branch:" %}</dt>
+                                <dd>
+                                    <code class="text-primary">{{ pull_request.branch }}</code>
+                                </dd>
+                            </div>
+                            <div class="col-md-3">
+                                <dt>{% trans "Status:" %}</dt>
+                                <dd>
+                                    <span class="badge {{ pull_request.get_status_display_class }}">
+                                        {{ pull_request.get_status_display }}
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="col-md-3">
+                                <dt>{% trans "Created:" %}</dt>
+                                <dd>
+                                    <span title="{{ pull_request.creation_date }}">
+                                        {{ pull_request.creation_date|date:"M d, Y" }}<br>
+                                        <small class="text-muted">{{ pull_request.creation_date|date:"H:i" }}</small>
+                                    </span>
+                                </dd>
+                            </div>
+                            {% if pull_request.resolution_date %}
+                                <div class="col-md-3">
+                                    <dt>
+                                        {% if pull_request.status == 2 %}
+                                            {% trans "Merged:" %}
+                                        {% else %}
+                                            {% trans "Discarded:" %}
+                                        {% endif %}
+                                    </dt>
+                                    <dd>
+                                        <span title="{{ pull_request.resolution_date }}">
+                                            {{ pull_request.resolution_date|date:"M d, Y" }}<br>
+                                            <small class="text-muted">{{ pull_request.resolution_date|date:"H:i" }}</small>
+                                        </span>
+                                    </dd>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Actions Section - Full Width -->
+            <div class="col-12">
                 <!-- Actions Card -->
-                <div class="card">
+                <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
                             <i class="fas fa-cogs"></i> {% trans "Actions" %}
@@ -59,9 +122,9 @@
                                             <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                             <h6 class="card-title">{% trans "Merge Pull Request" %}</h6>
                                             <p class="card-text text-muted small">{% trans "Merge this branch into main" %}</p>
-                                            <button class="btn btn-success btn-sm" onclick="alert('Merge functionality coming soon!')">
+                                            <a href="{% url 'helpdesk:pullrequest_merge' pull_request.branch %}" class="btn btn-success btn-sm">
                                                 <i class="fas fa-code-branch"></i> {% trans "Merge" %}
-                                            </button>
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -107,58 +170,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Sidebar -->
-            <div class="col-md-4">
-                <!-- Details Card -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-info-circle"></i> {% trans "Details" %}
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-sm-5">{% trans "Branch:" %}</dt>
-                            <dd class="col-sm-7">
-                                <code class="text-primary">{{ pull_request.branch }}</code>
-                            </dd>
-
-                            <dt class="col-sm-5">{% trans "Status:" %}</dt>
-                            <dd class="col-sm-7">
-                                <span class="badge {{ pull_request.get_status_display_class }}">
-                                    {{ pull_request.get_status_display }}
-                                </span>
-                            </dd>
-
-                            <dt class="col-sm-5">{% trans "Created:" %}</dt>
-                            <dd class="col-sm-7">
-                                <span title="{{ pull_request.creation_date }}">
-                                    {{ pull_request.creation_date|date:"M d, Y" }}<br>
-                                    <small class="text-muted">{{ pull_request.creation_date|date:"H:i" }}</small>
-                                </span>
-                            </dd>
-
-                            {% if pull_request.resolution_date %}
-                                <dt class="col-sm-5">
-                                    {% if pull_request.status == 2 %}
-                                        {% trans "Merged:" %}
-                                    {% else %}
-                                        {% trans "Discarded:" %}
-                                    {% endif %}
-                                </dt>
-                                <dd class="col-sm-7">
-                                    <span title="{{ pull_request.resolution_date }}">
-                                        {{ pull_request.resolution_date|date:"M d, Y" }}<br>
-                                        <small class="text-muted">{{ pull_request.resolution_date|date:"H:i" }}</small>
-                                    </span>
-                                </dd>
-                            {% endif %}
-                        </dl>
-                    </div>
-                </div>
-
             </div>
         </div>
         
