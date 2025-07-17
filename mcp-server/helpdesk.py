@@ -13,7 +13,10 @@ This MCP server exposes the django-helpdesk API to AI agents, providing tools fo
 
 import asyncio
 import json
+import logging
 import os
+import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urljoin
 import re
@@ -27,6 +30,7 @@ from mcp.types import (
     ListToolsResult,
     TextContent,
     Tool,
+    ServerCapabilities,
 )
 from pydantic import BaseModel, Field
 
@@ -51,7 +55,20 @@ class HelpdeskMCPServer:
         self.session_info = None
         self.csrf_token = None
         self.credentials = {"username": None, "password": None}
+        self.client_id = None
+        self._setup_logging()
         self._setup_handlers()
+    
+    def _setup_logging(self):
+        """Set up logging configuration"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
     
     def _load_config(self) -> HelpdeskConfig:
         """Load configuration from environment variables"""
@@ -81,7 +98,9 @@ class HelpdeskMCPServer:
         
         if not username or not password:
             raise Exception("Username and password must be provided via the authenticate tool")
-            
+        
+        self.logger.info(f"🔑 Attempting authentication for user: {username}")
+        
         try:
             # Get login page to extract CSRF token
             login_url = urljoin(self.config.base_url.rstrip("/") + "/", "login/")
@@ -126,18 +145,22 @@ class HelpdeskMCPServer:
             # Check for successful login (redirect or 200 with session)
             if response.status_code in [200, 302] and 'sessionid' in self.client.cookies:
                 self.authenticated = True
+                self.logger.info(f"✅ Successfully authenticated user: {username}")
                 
                 # Get session info if user is an agent
                 try:
                     session_info = await self._get_session_info()
                     if session_info:
                         self.session_info = session_info
+                        self.logger.info(f"👤 User {username} is an agent with branch: {session_info.get('branch_name', 'N/A')}")
                 except Exception:
                     # Not an agent or session info not available
+                    self.logger.info(f"👤 User {username} authenticated (not an agent)")
                     pass
                     
                 return True
             else:
+                self.logger.error(f"❌ Authentication failed for user {username}: status {response.status_code}")
                 raise Exception(f"Login failed with status {response.status_code}")
                 
         except Exception as e:
@@ -170,6 +193,8 @@ class HelpdeskMCPServer:
             
         url = urljoin(self.config.base_url.rstrip("/") + "/", f"api/{endpoint.lstrip('/')}")
         
+        self.logger.info(f"🌐 API Request: {method} {endpoint} {f'(params: {params})' if params else ''}")
+        
         try:
             response = await self.client.request(
                 method=method,
@@ -180,8 +205,11 @@ class HelpdeskMCPServer:
                 timeout=30.0,
             )
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            self.logger.info(f"✅ API Response: {method} {endpoint} -> {response.status_code}")
+            return result
         except httpx.HTTPError as e:
+            self.logger.error(f"❌ API Request failed: {method} {endpoint} -> {str(e)}")
             raise Exception(f"API request failed: {str(e)}")
     
     def _setup_handlers(self):
@@ -421,34 +449,45 @@ class HelpdeskMCPServer:
         async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
             """Handle tool calls"""
             
+            # Log tool calls but mask sensitive information
+            safe_args = arguments.copy() if arguments else {}
+            if name == "authenticate" and "password" in safe_args:
+                safe_args["password"] = "***"
+            self.logger.info(f"🔧 Tool called: {name} {f'(args: {safe_args})' if safe_args else ''}")
+            
             try:
                 if name == "authenticate":
-                    return await self._authenticate_user(arguments)
+                    result = await self._authenticate_user(arguments)
                 elif name == "list_tickets":
-                    return await self._list_tickets(arguments)
+                    result = await self._list_tickets(arguments)
                 elif name == "get_ticket":
-                    return await self._get_ticket(arguments)
+                    result = await self._get_ticket(arguments)
                 elif name == "create_ticket":
-                    return await self._create_ticket(arguments)
+                    result = await self._create_ticket(arguments)
                 elif name == "add_followup":
-                    return await self._add_followup(arguments)
+                    result = await self._add_followup(arguments)
                 elif name == "update_ticket":
-                    return await self._update_ticket(arguments)
+                    result = await self._update_ticket(arguments)
                 elif name == "get_queues":
-                    return await self._get_queues(arguments)
+                    result = await self._get_queues(arguments)
                 elif name == "get_users":
-                    return await self._get_users(arguments)
+                    result = await self._get_users(arguments)
                 elif name == "get_agent_session_info":
-                    return await self._get_agent_session_info(arguments)
+                    result = await self._get_agent_session_info(arguments)
                 elif name == "set_agent_intent":
-                    return await self._set_agent_intent(arguments)
+                    result = await self._set_agent_intent(arguments)
                 elif name == "finish_agent_session":
-                    return await self._finish_agent_session(arguments)
+                    result = await self._finish_agent_session(arguments)
                 else:
+                    self.logger.warning(f"⚠️ Unknown tool requested: {name}")
                     return CallToolResult([
                         TextContent(type="text", text=f"Unknown tool: {name}")
                     ])
+                
+                self.logger.info(f"✅ Tool completed: {name}")
+                return result
             except Exception as e:
+                self.logger.error(f"❌ Tool error: {name} -> {str(e)}")
                 return CallToolResult([
                     TextContent(type="text", text=f"Error calling {name}: {str(e)}")
                 ])
@@ -754,16 +793,21 @@ class HelpdeskMCPServer:
     
     async def run(self):
         """Run the MCP server"""
+        self.logger.info("🚀 Starting Django Helpdesk MCP Server...")
+        self.logger.info(f"📡 Server version: 0.2.0")
+        self.logger.info(f"🔗 Django Helpdesk URL: {self.config.base_url}")
+        self.logger.info("⚡ Server ready - waiting for client connections...")
+        
         async with stdio_server() as (read_stream, write_stream):
+            self.logger.info("🔌 Client connected to MCP server")
             await self.server.run(
                 read_stream, 
                 write_stream, 
                 InitializationOptions(
                     server_name="django-helpdesk",
                     server_version="0.2.0",
-                    capabilities=self.server.get_capabilities(
-                        notification_options=None,
-                        experimental_capabilities=None,
+                    capabilities=ServerCapabilities(
+                        tools={},
                     ),
                 )
             )
@@ -771,8 +815,24 @@ class HelpdeskMCPServer:
 
 def main():
     """Main entry point"""
+    print("🎯 Django Helpdesk MCP Server")
+    print("=" * 50)
     server = HelpdeskMCPServer()
-    asyncio.run(server.run())
+    try:
+        asyncio.run(server.run())
+    except KeyboardInterrupt:
+        try:
+            server.logger.info("🛑 Server shutdown requested")
+        except:
+            pass
+        print("\n👋 Server stopped gracefully")
+    except Exception as e:
+        try:
+            server.logger.error(f"💥 Server error: {str(e)}")
+        except:
+            pass
+        print(f"\n❌ Server error: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@ docs/doctrees/*
 .venv
 logs/
 
+mcp-server/django_helpdesk_mcp.egg-info/
+
 # ignore demo attachments that user might have added
 helpdesk/attachments/
 demo/demodesk/media/helpdesk/attachments/*

@@ -42,6 +42,13 @@ cd mcp-server
 uv sync
 ```
 
+**Note**: If you encounter installation issues on macOS, you may need to use:
+
+```bash
+cd mcp-server
+python -m pip install --break-system-packages -e .
+```
+
 ## Configuration
 
 The MCP server can be configured using environment variables:
@@ -76,6 +83,39 @@ Or using the installed script:
 ```bash
 django-helpdesk-mcp
 ```
+
+### Server Logging
+
+The MCP server provides detailed logging to help monitor its operation:
+
+- **Startup**: Server version, configuration, and readiness status
+- **Client Connections**: When clients connect to the MCP server
+- **Authentication**: User login attempts and results
+- **API Requests**: All Django Helpdesk API calls with parameters and responses
+- **Tool Calls**: Each tool invocation with arguments and completion status
+- **Errors**: Detailed error messages for troubleshooting
+
+Example log output:
+```
+🎯 Django Helpdesk MCP Server
+==================================================
+2025-07-17 13:14:58,023 - helpdesk - INFO - 🚀 Starting Django Helpdesk MCP Server...
+2025-07-17 13:14:58,023 - helpdesk - INFO - 📡 Server version: 0.2.0
+2025-07-17 13:14:58,023 - helpdesk - INFO - 🔗 Django Helpdesk URL: http://localhost:8080
+2025-07-17 13:14:58,023 - helpdesk - INFO - ⚡ Server ready - waiting for client connections...
+2025-07-17 13:14:58,024 - helpdesk - INFO - 🔌 Client connected to MCP server
+2025-07-17 13:15:02,156 - helpdesk - INFO - 🔧 Tool called: authenticate (args: {'username': 'agent1', 'password': '***'})
+2025-07-17 13:15:02,156 - helpdesk - INFO - 🔑 Attempting authentication for user: agent1
+2025-07-17 13:15:02,234 - helpdesk - INFO - ✅ Successfully authenticated user: agent1
+2025-07-17 13:15:02,234 - helpdesk - INFO - 👤 User agent1 is an agent with branch: agent1-xyz123
+2025-07-17 13:15:02,234 - helpdesk - INFO - ✅ Tool completed: authenticate
+2025-07-17 13:15:05,445 - helpdesk - INFO - 🔧 Tool called: list_tickets (args: {'status': 'Open'})
+2025-07-17 13:15:05,445 - helpdesk - INFO - 🌐 API Request: GET tickets/ (params: {'status': 'Open'})
+2025-07-17 13:15:05,567 - helpdesk - INFO - ✅ API Response: GET tickets/ -> 200
+2025-07-17 13:15:05,567 - helpdesk - INFO - ✅ Tool completed: list_tickets
+```
+
+**Security Note**: Passwords are automatically masked in log output for security.
 
 ### MCP Client Configuration
 

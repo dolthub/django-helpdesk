@@ -10,6 +10,9 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 
+[tool.setuptools]
+py-modules = ["helpdesk", "main"]
+
 [project.optional-dependencies]
 dev = [
     "python-dotenv>=1.0.0",
