@@ -21,6 +21,8 @@ import {
   ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import { createWriteStream, WriteStream } from 'fs';
+import { resolve } from 'path';
 
 interface HelpdeskConfig {
   baseUrl: string;
@@ -39,8 +41,9 @@ class HelpdeskMCPServer {
   private sessionInfo: any = null;
   private csrfToken?: string;
   private credentials: AuthCredentials = {};
+  private logStream?: WriteStream;
 
-  constructor() {
+  constructor(logFile?: string) {
     this.server = new Server(
       {
         name: 'django-helpdesk-ts',
@@ -55,6 +58,7 @@ class HelpdeskMCPServer {
       }
     );
 
+    this.setupFileLogging(logFile);
     this.config = this.loadConfig();
     this.client = axios.create({
       baseURL: this.config.baseUrl,
@@ -66,6 +70,32 @@ class HelpdeskMCPServer {
     this.setupLogging();
   }
 
+  private setupFileLogging(logFile?: string): void {
+    if (logFile) {
+      try {
+        const logPath = resolve(logFile);
+        this.logStream = createWriteStream(logPath, { flags: 'a' });
+        this.logStream.on('error', (err) => {
+          console.error(`Failed to write to log file ${logPath}: ${err.message}`);
+        });
+      } catch (error) {
+        console.error(`Failed to setup log file ${logFile}: ${error}`);
+      }
+    }
+  }
+
+  private log(message: string): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}\n`;
+    
+    if (this.logStream) {
+      this.logStream.write(logMessage);
+    } else {
+      // Fallback to stderr if no log file specified
+      process.stderr.write(logMessage);
+    }
+  }
+
   private loadConfig(): HelpdeskConfig {
     return {
       baseUrl: process.env.HELPDESK_BASE_URL || 'http://localhost:8080',
@@ -73,38 +103,38 @@ class HelpdeskMCPServer {
   }
 
   private setupLogging(): void {
-    // Setup request/response interceptors for detailed logging (using stderr)
+    // Setup request/response interceptors for detailed logging
     this.client.interceptors.request.use(
       (config) => {
-        console.error(`🌐 HTTP Request: ${config.method?.toUpperCase()} ${config.url}`);
-        console.error(`📤 Request Headers: ${JSON.stringify(config.headers, null, 2)}`);
+        this.log(`🌐 HTTP Request: ${config.method?.toUpperCase()} ${config.url}`);
+        this.log(`📤 Request Headers: ${JSON.stringify(config.headers, null, 2)}`);
         if (config.params) {
-          console.error(`📤 Request Params: ${JSON.stringify(config.params, null, 2)}`);
+          this.log(`📤 Request Params: ${JSON.stringify(config.params, null, 2)}`);
         }
         if (config.data) {
-          console.error(`📤 Request Body: ${JSON.stringify(config.data, null, 2)}`);
+          this.log(`📤 Request Body: ${JSON.stringify(config.data, null, 2)}`);
         }
         return config;
       },
       (error) => {
-        console.error(`❌ Request Error: ${error.message}`);
+        this.log(`❌ Request Error: ${error.message}`);
         return Promise.reject(error);
       }
     );
 
     this.client.interceptors.response.use(
       (response) => {
-        console.error(`📥 Response Status: ${response.status}`);
-        console.error(`📥 Response Headers: ${JSON.stringify(response.headers, null, 2)}`);
-        console.error(`📥 Response Body: ${JSON.stringify(response.data, null, 2)}`);
-        console.error(`✅ HTTP Response Success: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+        this.log(`📥 Response Status: ${response.status}`);
+        this.log(`📥 Response Headers: ${JSON.stringify(response.headers, null, 2)}`);
+        this.log(`📥 Response Body: ${JSON.stringify(response.data, null, 2)}`);
+        this.log(`✅ HTTP Response Success: ${response.config.method?.toUpperCase()} ${response.config.url}`);
         return response;
       },
       (error) => {
-        console.error(`❌ Response Error: ${error.message}`);
+        this.log(`❌ Response Error: ${error.message}`);
         if (error.response) {
-          console.error(`📥 Error Response Status: ${error.response.status}`);
-          console.error(`📥 Error Response Body: ${JSON.stringify(error.response.data, null, 2)}`);
+          this.log(`📥 Error Response Status: ${error.response.status}`);
+          this.log(`📥 Error Response Body: ${JSON.stringify(error.response.data, null, 2)}`);
         }
         return Promise.reject(error);
       }
@@ -114,9 +144,9 @@ class HelpdeskMCPServer {
   private setupHandlers(): void {
     // List tools handler
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      console.error('📨 MCP Request: list_tools');
-      console.error('📤 MCP Request Headers: {}');
-      console.error('📤 MCP Request Body: {}');
+      this.log('📨 MCP Request: list_tools');
+      this.log('📤 MCP Request Headers: {}');
+      this.log('📤 MCP Request Body: {}');
 
       const tools = [
         {
@@ -346,37 +376,37 @@ class HelpdeskMCPServer {
       ];
 
       const result = { tools };
-      console.error(`📥 MCP Response: list_tools -> ${tools.length} tools`);
-      console.error('📥 MCP Response Headers: {}');
-      console.error(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
+      this.log(`📥 MCP Response: list_tools -> ${tools.length} tools`);
+      this.log('📥 MCP Response Headers: {}');
+      this.log(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
 
       return result;
     });
 
     // List resources handler
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      console.error('📨 MCP Request: list_resources');
-      console.error('📤 MCP Request Headers: {}');
-      console.error('📤 MCP Request Body: {}');
+      this.log('📨 MCP Request: list_resources');
+      this.log('📤 MCP Request Headers: {}');
+      this.log('📤 MCP Request Body: {}');
 
       const result = { resources: [] };
-      console.error('📥 MCP Response: list_resources -> 0 resources');
-      console.error('📥 MCP Response Headers: {}');
-      console.error(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
+      this.log('📥 MCP Response: list_resources -> 0 resources');
+      this.log('📥 MCP Response Headers: {}');
+      this.log(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
 
       return result;
     });
 
     // List prompts handler
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
-      console.error('📨 MCP Request: list_prompts');
-      console.error('📤 MCP Request Headers: {}');
-      console.error('📤 MCP Request Body: {}');
+      this.log('📨 MCP Request: list_prompts');
+      this.log('📤 MCP Request Headers: {}');
+      this.log('📤 MCP Request Body: {}');
 
       const result = { prompts: [] };
-      console.error('📥 MCP Response: list_prompts -> 0 prompts');
-      console.error('📥 MCP Response Headers: {}');
-      console.error(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
+      this.log('📥 MCP Response: list_prompts -> 0 prompts');
+      this.log('📥 MCP Response Headers: {}');
+      this.log(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
 
       return result;
     });
@@ -399,9 +429,9 @@ class HelpdeskMCPServer {
         },
       };
 
-      console.error('📨 MCP Request: call_tool');
-      console.error('📤 MCP Request Headers: {}');
-      console.error(`📤 MCP Request Body: ${JSON.stringify(requestBody, null, 2)}`);
+      this.log('📨 MCP Request: call_tool');
+      this.log('📤 MCP Request Headers: {}');
+      this.log(`📤 MCP Request Body: ${JSON.stringify(requestBody, null, 2)}`);
 
       try {
         let result;
@@ -451,10 +481,10 @@ class HelpdeskMCPServer {
             };
         }
 
-        console.error(`✅ Tool completed: ${name}`);
-        console.error('📥 MCP Response: call_tool -> Success');
-        console.error('📥 MCP Response Headers: {}');
-        console.error(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
+        this.log(`✅ Tool completed: ${name}`);
+        this.log('📥 MCP Response: call_tool -> Success');
+        this.log('📥 MCP Response Headers: {}');
+        this.log(`📥 MCP Response Body: ${JSON.stringify(result, null, 2)}`);
 
         return result;
       } catch (error) {
@@ -469,10 +499,10 @@ class HelpdeskMCPServer {
           isError: true,
         };
 
-        console.error(`❌ Tool error: ${name} -> ${errorMessage}`);
-        console.error('📥 MCP Response: call_tool -> Error');
-        console.error('📥 MCP Response Headers: {}');
-        console.error(`📥 MCP Response Body: ${JSON.stringify(errorResult, null, 2)}`);
+        this.log(`❌ Tool error: ${name} -> ${errorMessage}`);
+        this.log('📥 MCP Response: call_tool -> Error');
+        this.log('📥 MCP Response Headers: {}');
+        this.log(`📥 MCP Response Body: ${JSON.stringify(errorResult, null, 2)}`);
 
         return errorResult;
       }
@@ -508,15 +538,15 @@ class HelpdeskMCPServer {
     this.credentials.username = username;
     this.credentials.password = password;
 
-    console.error(`🔑 Attempting authentication for user: ${username}`);
+    this.log(`🔑 Attempting authentication for user: ${username}`);
 
     try {
       // Get login page to extract CSRF token
       const loginUrl = `${this.config.baseUrl}/login/`;
-      console.error(`🌐 GET ${loginUrl}`);
+      this.log(`🌐 GET ${loginUrl}`);
       
       const loginPageResponse = await this.client.get(loginUrl);
-      console.error(`📥 Login page response: ${loginPageResponse.status}`);
+      this.log(`📥 Login page response: ${loginPageResponse.status}`);
 
       // Extract CSRF token
       let csrfToken = loginPageResponse.data.match(/name=['"']csrfmiddlewaretoken['"'] value=['"']([^'"]+)['"']/)?.[1];
@@ -533,7 +563,7 @@ class HelpdeskMCPServer {
       }
 
       this.csrfToken = csrfToken;
-      console.error(`🔑 Extracted CSRF token: ${csrfToken.substring(0, 10)}...`);
+      this.log(`🔑 Extracted CSRF token: ${csrfToken.substring(0, 10)}...`);
 
       // Perform login
       const loginData = {
@@ -548,9 +578,9 @@ class HelpdeskMCPServer {
         'Referer': loginUrl,
       };
 
-      console.error(`🌐 POST ${loginUrl}`);
-      console.error(`📤 Login Headers: ${JSON.stringify(loginHeaders, null, 2)}`);
-      console.error(`📤 Login Data: ${JSON.stringify({ ...loginData, password: '***' }, null, 2)}`);
+      this.log(`🌐 POST ${loginUrl}`);
+      this.log(`📤 Login Headers: ${JSON.stringify(loginHeaders, null, 2)}`);
+      this.log(`📤 Login Data: ${JSON.stringify({ ...loginData, password: '***' }, null, 2)}`);
 
       const loginResponse = await this.client.post(loginUrl, new URLSearchParams(loginData), {
         headers: loginHeaders,
@@ -558,11 +588,11 @@ class HelpdeskMCPServer {
         validateStatus: (status) => status >= 200 && status < 400,
       });
 
-      console.error(`📥 Login response status: ${loginResponse.status}`);
+      this.log(`📥 Login response status: ${loginResponse.status}`);
 
       if (loginResponse.status === 200 || loginResponse.status === 302) {
         this.authenticated = true;
-        console.error(`✅ Successfully authenticated user: ${username}`);
+        this.log(`✅ Successfully authenticated user: ${username}`);
 
         return {
           content: [
@@ -962,30 +992,59 @@ class HelpdeskMCPServer {
     }
   }
 
+  cleanup(): void {
+    if (this.logStream) {
+      this.logStream.end();
+    }
+  }
+
   async run(): Promise<void> {
-    console.error('🚀 Starting Django Helpdesk MCP Server (TypeScript)...');
-    console.error('📡 Server version: 0.1.0');
-    console.error(`🔗 Django Helpdesk URL: ${this.config.baseUrl}`);
-    console.error('⚡ Server ready - waiting for client connections...');
+    this.log('🚀 Starting Django Helpdesk MCP Server (TypeScript)...');
+    this.log('📡 Server version: 0.1.0');
+    this.log(`🔗 Django Helpdesk URL: ${this.config.baseUrl}`);
+    if (this.logStream) {
+      this.log(`📝 Logging to file enabled`);
+    } else {
+      this.log(`📝 Logging to stderr`);
+    }
+    this.log('⚡ Server ready - waiting for client connections...');
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    console.error('🔌 Client connected to MCP server');
+    this.log('🔌 Client connected to MCP server');
   }
+}
+
+// Parse command line arguments
+function parseArgs(): { logFile?: string } {
+  const args = process.argv.slice(2);
+  const result: { logFile?: string } = {};
+  
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--log-file' && i + 1 < args.length) {
+      result.logFile = args[i + 1];
+      i++; // Skip the next argument since it's the log file path
+    }
+  }
+  
+  return result;
 }
 
 // Main entry point
 async function main() {
-  const server = new HelpdeskMCPServer();
+  const { logFile } = parseArgs();
+  const server = new HelpdeskMCPServer(logFile);
   
   process.on('SIGINT', () => {
     console.error('\n🛑 Server shutdown requested');
+    server.cleanup();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
     console.error('\n🛑 Server shutdown requested');
+    server.cleanup();
     process.exit(0);
   });
 
@@ -993,6 +1052,7 @@ async function main() {
     await server.run();
   } catch (error) {
     console.error('💥 Server error:', error);
+    server.cleanup();
     process.exit(1);
   }
 }

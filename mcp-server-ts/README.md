@@ -51,6 +51,16 @@ npm run build
 npm start
 ```
 
+### Command Line Options
+
+- `--log-file <PATH>` - Write all logs to a file instead of stderr
+
+Example with log file:
+```bash
+npm run build
+node dist/index.js --log-file mcp-server.log
+```
+
 ### Environment Variables
 
 - `HELPDESK_BASE_URL` - Base URL of the Django Helpdesk instance (default: `http://localhost:8080`)
@@ -92,6 +102,11 @@ The server provides detailed logging for both MCP protocol messages and HTTP API
 - Full request/response details
 - Authentication flow
 - CSRF token handling
+
+### Log Output Options
+- **Default**: Logs to stderr (does not contaminate MCP stdout protocol)
+- **File logging**: Use `--log-file <path>` to write all logs to a file
+- **Timestamped**: All log entries include ISO timestamps
 
 ## Architecture
 
