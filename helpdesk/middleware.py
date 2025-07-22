@@ -172,12 +172,24 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
                 log_data['body'] = body
 
             # Log with appropriate level based on status code
-            #if response.status_code >= 500:
-            #    logger.error(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
-            #elif response.status_code >= 400:
-            #    logger.warning(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
-            #else:
-            #    logger.info(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
+            if response.status_code >= 500:
+                logger.error(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
+            elif response.status_code >= 400:
+                # For 4xx errors, include detailed error information if available
+                error_msg = f"Response: {response.status_code} for {request.method} {request.path}"
+                if body and isinstance(body, dict):
+                    # If we have structured error data, include the error details
+                    if 'error' in body:
+                        error_msg += f" - Error: {body['error']}"
+                    if 'message' in body:
+                        error_msg += f" - Message: {body['message']}"
+                elif body and isinstance(body, str):
+                    # If we have text error data, include it
+                    error_msg += f" - Details: {body}"
+                
+                logger.warning(error_msg, extra=log_data)
+            else:
+                logger.info(f"Response: {response.status_code} for {request.method} {request.path}", extra=log_data)
                 
         except Exception as e:
             # Use a minimal extra dict for error logging to avoid formatter issues
@@ -192,15 +204,26 @@ class RequestResponseLoggingMiddleware(MiddlewareMixin):
 
     def _get_user_info(self, request):
         """Get user information from the request."""
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            return {
-                'id': request.user.id,
-                'username': request.user.username,
-                'email': getattr(request.user, 'email', ''),
-                'is_staff': request.user.is_staff,
-                'is_superuser': request.user.is_superuser,
-            }
-        return None
+        if hasattr(request, 'user'):
+            # Debug logging to understand authentication issues
+            user = request.user
+            is_authenticated = user.is_authenticated if hasattr(user, 'is_authenticated') else False
+            
+            if is_authenticated:
+                user_info = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': getattr(user, 'email', ''),
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser,
+                }
+                # Return a formatted string for consistent logging
+                return f"{user.username} (ID: {user.id})"
+            else:
+                # Debug: Log why user is not authenticated
+                user_type = type(user).__name__
+                return f"Anonymous (user_type: {user_type})"
+        return "Anonymous (no request.user)"
 
     def _filter_headers(self, headers):
         """Filter out sensitive headers from logging."""
@@ -282,9 +305,11 @@ class AgentAccessControlMiddleware(MiddlewareMixin):
         super().__init__(get_response)
         self.get_response = get_response
         
-        # Paths that agents are allowed to access (for logout, etc.)
+        # Paths that agents are allowed to access (for API authentication and logout)
         self.allowed_paths = getattr(settings, 'HELPDESK_AGENT_ALLOWED_PATHS', [
             '/api/',
+            '/login/',  # Needed for Django session authentication (same as api_client.py)
+            '/logout/', # Needed for logout functionality
         ])
         
     def process_request(self, request):

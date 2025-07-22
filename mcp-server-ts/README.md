@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server written in TypeScript that provides access
 
 ## Available Tools
 
-- `authenticate` - Authenticate with django-helpdesk using username/password
+- `authenticate` - Authenticate with django-helpdesk using Django session login (same as api_client.py)
 - `list_tickets` - List tickets with optional filtering by status, queue, etc.
 - `get_ticket` - Get detailed information about a specific ticket
 - `create_ticket` - Create a new ticket
@@ -63,7 +63,7 @@ node dist/index.js --log-file mcp-server.log
 
 ### Environment Variables
 
-- `HELPDESK_BASE_URL` - Base URL of the Django Helpdesk instance (default: `http://localhost:8080`)
+- `HELPDESK_BASE_URL` - Base URL of the Django Helpdesk instance (default: `http://127.0.0.1:8080`)
 
 ## Configuration
 
@@ -73,6 +73,8 @@ The server can be configured via environment variables:
 export HELPDESK_BASE_URL=http://your-helpdesk-instance.com
 npm start
 ```
+
+**Note**: The server defaults to `http://127.0.0.1:8080` instead of `http://localhost:8080` to avoid potential IPv6 resolution issues with Node.js.
 
 ## MCP Client Configuration
 
@@ -100,8 +102,8 @@ The server provides detailed logging for both MCP protocol messages and HTTP API
 
 ### HTTP API Logging
 - Full request/response details
-- Authentication flow
-- CSRF token handling
+- Django session authentication flow (identical to api_client.py)
+- Enhanced 403 debugging with CSRF token status and detailed error information
 
 ### Log Output Options
 - **Default**: Logs to stderr (does not contaminate MCP stdout protocol)
@@ -112,7 +114,8 @@ The server provides detailed logging for both MCP protocol messages and HTTP API
 
 - **TypeScript** - Full type safety and modern JavaScript features
 - **@modelcontextprotocol/sdk** - Official MCP SDK for TypeScript
-- **Axios** - HTTP client with request/response interceptors
+- **Django Session Authentication** - Uses same login flow as api_client.py with CSRF tokens
+- **Full Compatibility** - Works with both regular staff users and agent users
 - **ESM modules** - Modern module system
 
 ## Development
@@ -140,8 +143,18 @@ mcp-server-ts/
 
 The server includes comprehensive error handling for:
 - Authentication failures
-- API request errors
+- API request errors with enhanced 403 debugging
 - MCP protocol errors
 - Network connectivity issues
+
+### Enhanced 403 Debugging
+
+When a 403 Forbidden error occurs, the server logs detailed debugging information including:
+- Request URL and method
+- Request headers and authentication status
+- CSRF token status
+- Current cookie jar contents
+- Detailed error response from Django
+- API request configuration details
 
 All errors are logged with detailed information and returned as proper MCP error responses.

@@ -23,6 +23,8 @@ import {
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { createWriteStream, WriteStream } from 'fs';
 import { resolve } from 'path';
+import { wrapper as axiosCookieJarSupport } from 'axios-cookiejar-support';
+import { CookieJar } from 'tough-cookie';
 
 interface HelpdeskConfig {
   baseUrl: string;
@@ -42,6 +44,7 @@ class HelpdeskMCPServer {
   private csrfToken?: string;
   private credentials: AuthCredentials = {};
   private logStream?: WriteStream;
+  private cookieJar: CookieJar;
 
   constructor(logFile?: string) {
     this.server = new Server(
@@ -60,10 +63,17 @@ class HelpdeskMCPServer {
 
     this.setupFileLogging(logFile);
     this.config = this.loadConfig();
+    this.cookieJar = new CookieJar();
+    
+    // Set up axios with cookie jar support
+    axiosCookieJarSupport(axios);
+    
     this.client = axios.create({
       baseURL: this.config.baseUrl,
       timeout: 30000,
       withCredentials: true,
+      // Enable cookie jar for automatic cookie handling
+      jar: this.cookieJar,
     });
 
     this.setupHandlers();
@@ -96,9 +106,32 @@ class HelpdeskMCPServer {
     }
   }
 
+  private getCurrentCsrfToken(): string | null {
+    /**
+     * Extract current CSRF token from cookies.
+     * This is required for Django REST Framework's SessionAuthentication.
+     */
+    try {
+      const jar = (this.client.defaults as any).jar;
+      if (!jar) return null;
+
+      const cookies = jar.getCookiesSync(this.config.baseUrl);
+      for (const cookie of cookies) {
+        if (cookie.key === 'csrftoken') {
+          return cookie.value;
+        }
+      }
+    } catch (error) {
+      this.log(`⚠️ Error getting CSRF token from cookies: ${error}`);
+    }
+    return null;
+  }
+
   private loadConfig(): HelpdeskConfig {
+    // Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+    const defaultUrl = process.env.HELPDESK_BASE_URL || 'http://127.0.0.1:8080';
     return {
-      baseUrl: process.env.HELPDESK_BASE_URL || 'http://localhost:8080',
+      baseUrl: defaultUrl,
     };
   }
 
@@ -134,7 +167,42 @@ class HelpdeskMCPServer {
         this.log(`❌ Response Error: ${error.message}`);
         if (error.response) {
           this.log(`📥 Error Response Status: ${error.response.status}`);
+          this.log(`📥 Error Response Headers: ${JSON.stringify(error.response.headers, null, 2)}`);
           this.log(`📥 Error Response Body: ${JSON.stringify(error.response.data, null, 2)}`);
+          
+          // Enhanced debugging for 403 Forbidden errors
+          if (error.response.status === 403) {
+            this.log(`🚫 403 FORBIDDEN DEBUG INFO:`);
+            this.log(`🚫 Request URL: ${error.config?.url}`);
+            this.log(`🚫 Request Method: ${error.config?.method?.toUpperCase()}`);
+            this.log(`🚫 Request Headers: ${JSON.stringify(error.config?.headers, null, 2)}`);
+            this.log(`🚫 Authentication Status: ${this.authenticated}`);
+            this.log(`🚫 Authentication Method: HTTP Basic Auth`);
+            this.log(`🚫 CSRF Token: ${this.csrfToken ? this.csrfToken.substring(0, 10) + '...' : 'None'}`);
+            
+            // Log cookies for debugging
+            if (this.cookieJar) {
+              this.cookieJar.getCookies(error.config?.url || this.config.baseUrl)
+                .then(cookies => {
+                  this.log(`🚫 Current Cookies: ${cookies.map(c => `${c.key}=${c.value}`).join('; ')}`);
+                })
+                .catch(cookieError => {
+                  this.log(`🚫 Cookie Error: ${cookieError.message}`);
+                });
+            }
+            
+            // Log response details that might indicate permission issues
+            if (error.response.data) {
+              const errorData = error.response.data;
+              if (typeof errorData === 'string') {
+                this.log(`🚫 Error Message: ${errorData}`);
+              } else if (errorData.detail) {
+                this.log(`🚫 Error Detail: ${errorData.detail}`);
+              } else if (errorData.error) {
+                this.log(`🚫 Error Field: ${errorData.error}`);
+              }
+            }
+          }
         }
         return Promise.reject(error);
       }
@@ -522,12 +590,39 @@ class HelpdeskMCPServer {
     if (params) config.params = params;
     if (data) config.data = data;
     
-    if (data && this.csrfToken) {
-      config.headers = {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': this.csrfToken,
-      };
+    // Set up headers
+    config.headers = {};
+    
+    // Add Content-Type for requests with data
+    if (data) {
+      config.headers['Content-Type'] = 'application/json';
     }
+    
+    // Add CSRF token if available (needed for POST/PUT/PATCH/DELETE requests)
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+      // Get current CSRF token from cookies (required for DRF SessionAuthentication)
+      const currentCsrfToken = this.getCurrentCsrfToken();
+      if (currentCsrfToken) {
+        config.headers['X-CSRFToken'] = currentCsrfToken;
+        this.log(`🔑 Using current CSRF token: ${currentCsrfToken.substring(0, 20)}...`);
+      } else if (this.csrfToken) {
+        // Fallback to stored token from login
+        config.headers['X-CSRFToken'] = this.csrfToken;
+        this.log(`🔑 Using stored CSRF token: ${this.csrfToken.substring(0, 20)}...`);
+      } else {
+        this.log(`⚠️ No CSRF token available for ${method} request`);
+      }
+    }
+
+    // Enhanced logging for API requests to help debug 403s
+    this.log(`🔧 Making API request: ${method} ${config.url}`);
+    this.log(`🔧 Request config: ${JSON.stringify({
+      method: config.method,
+      url: config.url,
+      headers: config.headers,
+      hasData: !!data,
+      hasParams: !!params
+    }, null, 2)}`);
 
     const response = await this.client.request(config);
     return response.data;
@@ -538,75 +633,143 @@ class HelpdeskMCPServer {
     this.credentials.username = username;
     this.credentials.password = password;
 
-    this.log(`🔑 Attempting authentication for user: ${username}`);
+    // Check if already authenticated - test with a simple API call
+    this.log(`🔍 Checking if already authenticated...`);
+    try {
+      const testResponse = await this.client.get('/api/agent-session-info/');
+      if (testResponse.status === 200) {
+        this.log(`✅ Already authenticated! Session info: ${JSON.stringify(testResponse.data)}`);
+        this.authenticated = true;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Already authenticated as user: ${testResponse.data.username}\nBranch: ${testResponse.data.branch_name || 'Not set'}\nIntent: ${testResponse.data.intent || 'Not set'}`,
+            },
+          ],
+        };
+      }
+    } catch (error) {
+      this.log(`🔍 Not authenticated yet, proceeding with login...`);
+    }
+
+    this.log(`🔑 Attempting Django session authentication for user: ${username}`);
 
     try {
-      // Get login page to extract CSRF token
+      // Step 1: Get the login page to extract CSRF token (same as api_client.py)
       const loginUrl = `${this.config.baseUrl}/login/`;
-      this.log(`🌐 GET ${loginUrl}`);
+      this.log(`🌐 Getting CSRF token from login page: GET ${loginUrl}`);
       
       const loginPageResponse = await this.client.get(loginUrl);
       this.log(`📥 Login page response: ${loginPageResponse.status}`);
 
-      // Extract CSRF token
-      let csrfToken = loginPageResponse.data.match(/name=['"']csrfmiddlewaretoken['"'] value=['"']([^'"]+)['"']/)?.[1];
-      if (!csrfToken && loginPageResponse.headers['set-cookie']) {
+      // Step 2: Extract CSRF token from login form (same logic as api_client.py)
+      let csrfToken = null;
+      
+      // Try to extract from HTML form
+      const csrfMatch = loginPageResponse.data.match(/name=['"]csrfmiddlewaretoken['"] value=['"]([^'"]+)['"]/);
+      if (csrfMatch) {
+        csrfToken = csrfMatch[1];
+        this.log(`🔑 CSRF token extracted from login form: ${csrfToken.substring(0, 20)}...`);
+      }
+      
+      // Also get CSRF token from cookies
+      if (loginPageResponse.headers['set-cookie']) {
         const csrfCookie = loginPageResponse.headers['set-cookie']
           .find((cookie: string) => cookie.startsWith('csrftoken='));
         if (csrfCookie) {
-          csrfToken = csrfCookie.split('=')[1].split(';')[0];
+          const cookieToken = csrfCookie.split('=')[1].split(';')[0];
+          if (!csrfToken) {
+            csrfToken = cookieToken;
+          }
+          this.log(`🔑 CSRF token from cookies: ${cookieToken.substring(0, 20)}...`);
         }
       }
-
+      
       if (!csrfToken) {
-        throw new Error('Could not extract CSRF token');
+        this.log(`⚠️ No CSRF token found, proceeding without it`);
       }
 
-      this.csrfToken = csrfToken;
-      this.log(`🔑 Extracted CSRF token: ${csrfToken.substring(0, 10)}...`);
-
-      // Perform login
-      const loginData = {
+      // Step 3: Prepare login data (same as api_client.py)
+      const loginData: any = {
         username,
         password,
-        csrfmiddlewaretoken: csrfToken,
       };
+      
+      if (csrfToken) {
+        loginData.csrfmiddlewaretoken = csrfToken;
+      }
 
-      const loginHeaders = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRFToken': csrfToken,
+      // Step 4: Prepare headers (same as api_client.py)
+      const headers: any = {
         'Referer': loginUrl,
+        'Content-Type': 'application/x-www-form-urlencoded',
       };
+      
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+        this.csrfToken = csrfToken; // Store for future API calls
+      }
 
-      this.log(`🌐 POST ${loginUrl}`);
-      this.log(`📤 Login Headers: ${JSON.stringify(loginHeaders, null, 2)}`);
-      this.log(`📤 Login Data: ${JSON.stringify({ ...loginData, password: '***' }, null, 2)}`);
+      this.log(`🌐 Submitting login form to: ${loginUrl}`);
+      this.log(`📤 Login headers: ${JSON.stringify(headers, null, 2)}`);
+      this.log(`📤 Login data: ${JSON.stringify({ ...loginData, password: '***' }, null, 2)}`);
 
+      // Step 5: Submit login form (use form data, not JSON)
       const loginResponse = await this.client.post(loginUrl, new URLSearchParams(loginData), {
-        headers: loginHeaders,
+        headers,
         maxRedirects: 0,
         validateStatus: (status) => status >= 200 && status < 400,
       });
 
       this.log(`📥 Login response status: ${loginResponse.status}`);
+      this.log(`📥 Response headers: ${JSON.stringify(loginResponse.headers, null, 2)}`);
 
-      if (loginResponse.status === 200 || loginResponse.status === 302) {
+      // Step 6: Check for successful login (same logic as api_client.py)
+      let loginSuccess = false;
+      
+      if (loginResponse.status === 302 || loginResponse.status === 301) {
+        this.log(`✅ Login successful (redirect detected)`);
+        loginSuccess = true;
+      } else if (loginResponse.status === 200) {
+        // Check if we're still on login page (login failed) or redirected to dashboard
+        const responseText = loginResponse.data || '';
+        if (responseText.includes('login') || responseText.includes('password')) {
+          this.log(`❌ Login failed - still on login page`);
+          throw new Error('Invalid credentials');
+        } else {
+          this.log(`✅ Login successful (200 response)`);
+          loginSuccess = true;
+        }
+      } else {
+        throw new Error(`Login failed with status ${loginResponse.status}`);
+      }
+
+      if (loginSuccess) {
+        // Check for session cookie
+        const sessionCookies = loginResponse.headers['set-cookie'] || [];
+        const sessionCookie = sessionCookies.find((cookie: string) => cookie.startsWith('sessionid='));
+        if (sessionCookie) {
+          this.log(`🍪 Session ID: ${sessionCookie.split('=')[1].split(';')[0].substring(0, 20)}...`);
+        }
+
         this.authenticated = true;
-        this.log(`✅ Successfully authenticated user: ${username}`);
+        this.log(`✅ Successfully authenticated user: ${username} using Django session login`);
 
         return {
           content: [
             {
               type: 'text',
-              text: `✓ Successfully authenticated as ${username}\n\nYou can now use other tools to interact with the helpdesk system.`,
+              text: `✓ Successfully authenticated as ${username} using Django session authentication\n\nYou can now use other tools to interact with the helpdesk system.`,
             },
           ],
         };
       } else {
-        throw new Error(`Login failed with status ${loginResponse.status}`);
+        throw new Error('Authentication failed');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      this.log(`❌ Authentication failed for ${username}: ${errorMessage}`);
       throw new Error(`Authentication failed: ${errorMessage}`);
     }
   }
