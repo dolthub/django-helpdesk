@@ -85,7 +85,7 @@ Add this server to your MCP client configuration:
   "mcpServers": {
     "django-helpdesk-ts": {
       "command": "node",
-      "args": ["/path/to/django-helpdesk/mcp-server-ts/dist/index.js"]
+      "args": ["/path/to/django-helpdesk/mcp-server/dist/index.js"]
     }
   }
 }
@@ -130,7 +130,7 @@ The server provides detailed logging for both MCP protocol messages and HTTP API
 ### Project Structure
 
 ```
-mcp-server-ts/
+mcp-server/
 ├── src/
 │   └── index.ts          # Main server implementation
 ├── dist/                 # Built JavaScript (created by build)
